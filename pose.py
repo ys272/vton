@@ -1,0 +1,108 @@
+# Import TF and TF Hub libraries.
+import tensorflow as tf
+import tensorflow_hub as hub
+import cv2
+import numpy as np
+import os 
+from utils import resize_image_with_padding
+from config import keypoints, idx_to_keypoint_name, keypoint_name_to_idx, MOVENET_MODEL
+from typing import Union
+
+
+if MOVENET_MODEL.startswith('thunder'):
+        resolution = 256
+else:
+    resolution = 192
+
+
+model = hub.load('/home/yoni/Desktop/f/ext-code/movenet/' + MOVENET_MODEL)
+movenet = model.signatures['serving_default']
+
+
+def is_person_detected(img) -> bool:      
+    PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.75
+    # Return False if a person wasn't detected, else - return True
+    if img.shape[0] != resolution or img.shape[1] != resolution:
+        img = resize_image_with_padding(resolution, resolution, img=img)
+    img = tf.cast(img, dtype=tf.int32)
+    img = tf.expand_dims(img, axis=0)
+    outputs = movenet(img)
+    # Output is a [1, 1, 17, 3] tensor.
+    keypoints = outputs['output_0']
+    # List of coordinates (x, y) where you want to draw circles
+    coords = [k for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
+    if len(coords) < 5:
+        return False
+    return True
+
+
+def get_keypoints(img) -> Union[bool, np.ndarray]:
+    PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.5
+    # Return False if a person isn't detected. Otherwise, return keypoints.
+    if img.shape[0] != resolution or img.shape[1] != resolution:
+        img = resize_image_with_padding(resolution, resolution, img=img)
+    img = tf.cast(img, dtype=tf.int32)
+    img = tf.expand_dims(img, axis=0)
+    outputs = movenet(img)
+    # Output is a [1, 1, 17, 3] tensor.
+    keypoints = outputs['output_0']
+    coords = [(int(k[1]*resolution),int(k[0]*resolution)) for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
+    if len(coords) < 5:
+        return False
+    return coords
+
+
+COLOR_AQUA = (255, 255, 0) # BGR format
+def save_img_w_overlaid_keypoints(img, keypoint_coords, output_path):
+    # This assumes the image is a square
+    scale_factor_0 = img.shape[0] / resolution
+    scale_factor_1 = img.shape[1] / resolution
+    # Draw circles on the image at the given coordinates
+    for coord in keypoint_coords:
+        coord = (int(coord[0] * scale_factor_0), int(coord[1] * scale_factor_1))
+        cv2.circle(img, coord, radius=2, color=COLOR_AQUA, thickness=-1)
+    # Save the resulting image with drawn circles
+    cv2.imwrite(output_path, img)
+
+
+if __name__ == '__main__':
+    img_dir = r'/home/yoni/Desktop/f/demo/inputs'
+    output_dir = r'/home/yoni/Desktop/f/demo/outputs'        
+    new_width = resolution
+    new_height = resolution
+
+    for img_filename in os.listdir(img_dir):
+        # Load the input image.
+        input_image_path = os.path.join(img_dir, img_filename)
+
+        resized_image = resize_image_with_padding(new_width, new_height, input_img_path=input_image_path)
+        # Save the output image
+        # output_image_path = os.path.join(img_dir,f'rescaled_{img_filename}')  # Replace with your desired output image file path
+        # cv2.imwrite(output_image_path, resized_image)
+
+        image = tf.io.read_file(input_image_path)
+        image = tf.compat.v1.image.decode_jpeg(image)
+        image = tf.expand_dims(image, axis=0)
+
+        # Resize and pad the image to keep the aspect ratio and fit the expected size.
+        image = tf.cast(tf.image.resize_with_pad(image, new_width, new_height), dtype=tf.int32)
+        # breakpoint()
+        # Run model inference.
+        outputs = movenet(image)
+        # Output is a [1, 1, 17, 3] tensor.
+        keypoints = outputs['output_0']
+        # List of coordinates (x, y) where you want to draw circles
+        THRESHOLD = 0.5
+        coords = [(int(k[1]*resolution),int(k[0]*resolution)) for k in keypoints[0][0].numpy() if k[2] > THRESHOLD]
+        if len(coords) < 5:
+            continue
+        print(img_filename, len(coords))
+        # Define the color (Aqua in BGR format)
+        color = (255, 255, 0)
+        # Draw circles on the image at the given coordinates
+        # breakpoint()
+        for coord in coords:
+            cv2.circle(resized_image, coord, radius=2, color=color, thickness=-1)
+        output_image_path = os.path.join(output_dir, f'circles_{img_filename}')
+        # Save the resulting image with drawn circles
+        cv2.imwrite(output_image_path, resized_image)

@@ -1,0 +1,45 @@
+import os
+
+ROOT_DIR = '/home/yoni/Desktop/f'
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
+DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_large', 'paired_medium']
+PREPROCESSED_DATA_VTON_DIR = os.path.join(DATA_DIR, 'processed_data_vton')
+PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection']
+
+dirs = [ROOT_DIR, DATA_DIR, ORIGINAL_DATA_DIR, PREPROCESSED_DATA_VTON_DIR]
+for dir in dirs:
+    os.makedirs(dir, exist_ok=True)
+for dir in DATA_SOURCES:
+    for sub_dir in PREPROCESSED_DATA_VTON_SUB_DIRS:
+        os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir), exist_ok=True)
+
+'''
+pose model
+'''
+MOVENET_MODEL_OPTIONS = ['thunder/', # originally from: https://tfhub.dev/google/movenet/singlepose/thunder/4"
+                 'lightning/'] # https://tfhub.dev/google/movenet/singlepose/lightning/4
+MOVENET_MODEL = MOVENET_MODEL_OPTIONS[0]
+keypoints = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear', 'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle']
+idx_to_keypoint_name = {i:keypoint for i,keypoint in enumerate(keypoints)}
+keypoint_name_to_idx = {keypoint:i for i,keypoint in enumerate(keypoints)}
+idx_to_body_keypoint_name = {i:keypoint for i,keypoint in enumerate(keypoints[5:])}
+body_keypoint_name_to_idx = {keypoint:i for i,keypoint in enumerate(keypoints[5:])}
+#  {0: 'nose', 1: 'left_eye', 2: 'right_eye', 3: 'left_ear', 4: 'right_ear', 5: 'left_shoulder', 6: 'right_shoulder', 7: 'left_elbow', 8: 'right_elbow', 9: 'left_wrist', 10: 'right_wrist', 11: 'left_hip', 12: 'right_hip', 13: 'left_knee', 14: 
+# 'right_knee', 15: 'left_ankle', 16: 'right_ankle'}
+
+
+'''
+schp model
+'''
+SCHP_ROOT_DIR = os.path.join(ROOT_DIR, 'ext-code/Self-Correction-Human-Parsing')
+SCHP_SCRIPT_PATH = os.path.join(ROOT_DIR, 'code/algo/scripts/schp.sh')
+schp_labels = ['Background', 'Hat', 'Hair', 'Sunglasses', 'Upper-clothes', 'Skirt', 'Pants', 'Dress', 'Belt', 'Left-shoe', 'Right-shoe', 'Face', 'Left-leg', 'Right-leg', 'Left-arm', 'Right-arm', 'Bag', 'Scarf']
+idx_to_schp_label = {i:label for i,label in enumerate(schp_labels)}
+schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
+# {'Background': 0, 'Hat': 1, 'Hair': 2, 'Sunglasses': 3, 'Upper-clothes': 4, 'Skirt': 5, 'Pants': 6, 
+# 'Dress': 7, 'Belt': 8, 'Left-shoe': 9, 'Right-shoe': 10, 'Face': 11, 'Left-leg': 12, 'Right-leg': 13, 
+# 'Left-arm': 14, 'Right-arm': 15, 'Bag': 16, 'Scarf': 17}
+
+
+VTON_RESOLUTION = 128

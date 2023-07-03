@@ -21,6 +21,8 @@ def resize_image_with_padding(width:int, height:int, input_img_path:str = None, 
 
     # Resize the image while maintaining the aspect ratio
     resized_image = cv2.resize(img, (new_width, new_height))
+    
+    
 
     # Calculate the padding required to achieve the desired dimensions
     vertical_padding = (height - new_height) // 2
@@ -41,3 +43,65 @@ def resize_image_with_padding(width:int, height:int, input_img_path:str = None, 
     canvas[vertical_padding:vertical_padding+new_height, horizontal_padding:horizontal_padding+new_width] = resized_image
 
     return canvas
+
+def pad_to_square_and_resize_img(image, target_width, target_height):
+    # Get the original image dimensions
+    height, width = image.shape[:2]
+
+    # Determine the maximum dimension
+    max_dim = max(width, height)
+
+    # Calculate the padding required to make the image square
+    pad_x = (max_dim - width) // 2
+    pad_y = (max_dim - height) // 2
+
+    # Adjust padding if image dimensions are odd
+    if width % 2 != 0:
+        pad_x += 1
+    if height % 2 != 0:
+        pad_y += 1
+
+    # Create a padded square canvas
+    padded_image = cv2.copyMakeBorder(image, pad_y, pad_y, pad_x, pad_x, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    
+    # Resize the padded image to the target dimensions
+    # resized_image = cv2.resize(padded_image, (target_width, target_height))
+    resized_image = cv2.resize(padded_image, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+
+
+    return resized_image
+
+
+def resize_image(target_width:int, target_height:int, input_img_path:str = None, img=None) -> np.ndarray:
+    
+    if img is None:
+        img = cv2.imread(input_img_path)
+    
+    # Get the original width and height
+    original_height, original_width = img.shape[:2]
+    
+    # Calculate the aspect ratio
+    aspect_ratio = original_width / original_height
+    
+    # Calculate the new width and height based on the aspect ratio
+    if target_width / aspect_ratio <= target_height:
+        new_width = target_width
+        new_height = round(target_width / aspect_ratio)
+    else:
+        new_width = round(target_height * aspect_ratio)
+        new_height = target_height
+    
+    # Resize the image while maintaining the aspect ratio
+    resized_image = cv2.resize(img, (new_width, new_height))
+    
+    # Create a new blank image with the target width and height
+    padded_image = np.ones((target_height, target_width, 3), dtype=np.uint8) * 255
+    
+    # Calculate the position to paste the resized image to center it
+    x = (target_width - new_width) // 2
+    y = (target_height - new_height) // 2
+    
+    # Paste the resized image onto the padded image
+    padded_image[y:y+new_height, x:x+new_width] = resized_image
+    
+    return padded_image

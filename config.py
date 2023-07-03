@@ -3,9 +3,9 @@ import os
 ROOT_DIR = '/home/yoni/Desktop/f'
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
 ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
-DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_large', 'paired_medium']
+DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res']
 PREPROCESSED_DATA_VTON_DIR = os.path.join(DATA_DIR, 'processed_data_vton')
-PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection']
+PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection', 'problematic_data']
 
 dirs = [ROOT_DIR, DATA_DIR, ORIGINAL_DATA_DIR, PREPROCESSED_DATA_VTON_DIR]
 for dir in dirs:

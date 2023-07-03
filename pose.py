@@ -14,55 +14,59 @@ if MOVENET_MODEL.startswith('thunder'):
 else:
     resolution = 192
 
+class PoseModel:
+    def __init__(self):
+        self.model = hub.load('/home/yoni/Desktop/f/ext-code/movenet/' + MOVENET_MODEL)
+        self.movenet = self.model.signatures['serving_default']
+        self.COLOR_AQUA = (255, 255, 0) # BGR format
 
-model = hub.load('/home/yoni/Desktop/f/ext-code/movenet/' + MOVENET_MODEL)
-movenet = model.signatures['serving_default']
-
-
-def is_person_detected(img) -> bool:      
-    PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.75
-    # Return False if a person wasn't detected, else - return True
-    if img.shape[0] != resolution or img.shape[1] != resolution:
-        img = resize_image_with_padding(resolution, resolution, img=img)
-    img = tf.cast(img, dtype=tf.int32)
-    img = tf.expand_dims(img, axis=0)
-    outputs = movenet(img)
-    # Output is a [1, 1, 17, 3] tensor.
-    keypoints = outputs['output_0']
-    # List of coordinates (x, y) where you want to draw circles
-    coords = [k for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
-    if len(coords) < 5:
-        return False
-    return True
-
-
-def get_keypoints(img) -> Union[bool, np.ndarray]:
-    PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.5
-    # Return False if a person isn't detected. Otherwise, return keypoints.
-    if img.shape[0] != resolution or img.shape[1] != resolution:
-        img = resize_image_with_padding(resolution, resolution, img=img)
-    img = tf.cast(img, dtype=tf.int32)
-    img = tf.expand_dims(img, axis=0)
-    outputs = movenet(img)
-    # Output is a [1, 1, 17, 3] tensor.
-    keypoints = outputs['output_0']
-    coords = [(int(k[1]*resolution),int(k[0]*resolution)) for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
-    if len(coords) < 5:
-        return False
-    return coords
+    def is_person_detected(self, img) -> bool:      
+        PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.75
+        # Return False if a person wasn't detected, else - return True
+        if img.shape[0] != resolution or img.shape[1] != resolution:
+            img = resize_image_with_padding(resolution, resolution, img=img)
+        img = tf.cast(img, dtype=tf.int32)
+        img = tf.expand_dims(img, axis=0)
+        outputs = self.movenet(img)
+        # Output is a [1, 1, 17, 3] tensor.
+        keypoints = outputs['output_0']
+        # List of coordinates (x, y) where you want to draw circles
+        coords = [k for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
+        if len(coords) < 5:
+            return False
+        return True
 
 
-COLOR_AQUA = (255, 255, 0) # BGR format
-def save_img_w_overlaid_keypoints(img, keypoint_coords, output_path):
-    # This assumes the image is a square
-    scale_factor_0 = img.shape[0] / resolution
-    scale_factor_1 = img.shape[1] / resolution
-    # Draw circles on the image at the given coordinates
-    for coord in keypoint_coords:
-        coord = (int(coord[0] * scale_factor_0), int(coord[1] * scale_factor_1))
-        cv2.circle(img, coord, radius=2, color=COLOR_AQUA, thickness=-1)
-    # Save the resulting image with drawn circles
-    cv2.imwrite(output_path, img)
+    def get_keypoints(self, img, num_points=5) -> Union[bool, np.ndarray]:
+        PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.5
+        # Return False if a person isn't detected. Otherwise, return keypoints.
+        if img.shape[0] != resolution or img.shape[1] != resolution:
+            img = resize_image_with_padding(resolution, resolution, img=img)
+        img = tf.cast(img, dtype=tf.int32)
+        img = tf.expand_dims(img, axis=0)
+        outputs = self.movenet(img)
+        # Output is a [1, 1, 17, 3] tensor.
+        keypoints = outputs['output_0']
+        coords = [(int(k[1]*resolution),int(k[0]*resolution)) for k in keypoints[0][0].numpy() if k[2] > PERSON_DETECTION_CONFIDENCE_THRESHOLD]
+        if len(coords) < num_points:
+            return False
+        return coords
+
+
+    def save_or_return_img_w_overlaid_keypoints(self, img, keypoint_coords, output_path=None, return_value=False):
+        # This assumes the image is a square
+        scale_factor_0 = img.shape[0] / resolution
+        scale_factor_1 = img.shape[1] / resolution
+        # Draw circles on the image at the given coordinates
+        for coord in keypoint_coords:
+            coord = (int(coord[0] * scale_factor_0), int(coord[1] * scale_factor_1))
+            cv2.circle(img, coord, radius=2, color=self.COLOR_AQUA, thickness=-1)
+        # Save the resulting image with drawn circles
+        if output_path:
+            cv2.imwrite(output_path, img)
+        if return_value:
+            return img
+        
 
 
 if __name__ == '__main__':
@@ -86,9 +90,9 @@ if __name__ == '__main__':
 
         # Resize and pad the image to keep the aspect ratio and fit the expected size.
         image = tf.cast(tf.image.resize_with_pad(image, new_width, new_height), dtype=tf.int32)
-        # breakpoint()
         # Run model inference.
-        outputs = movenet(image)
+        pose_model = PoseModel()
+        outputs = pose_model.movenet(image)
         # Output is a [1, 1, 17, 3] tensor.
         keypoints = outputs['output_0']
         # List of coordinates (x, y) where you want to draw circles

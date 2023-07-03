@@ -6,22 +6,31 @@ import subprocess
 
 
 BUFFER = 3
-def extract_person_without_clothing(argmaxes: np.ndarray, clothing_type = 'Upper-clothes'):
+def extract_person_without_clothing(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
   '''
   Create a bounding box/rectangle that covers the entire area where the
   clothing currently is (minimum enclosing rectangle).
   '''
- 
-  clothing_type_idx = schp_label_to_idx[clothing_type]
-  clothing_pixels = np.where(argmaxes == clothing_type_idx)
+  clothing_pixels = np.where(np.isin(argmaxes, clothing_types))
   if len(clothing_pixels[0]):
     top_y_clothing = np.min(clothing_pixels[0])
     bottom_y_clothing = np.max(clothing_pixels[0])
     leftmost_x_clothing = np.min(clothing_pixels[1])
     rightmost_x_clothing = np.max(clothing_pixels[1])
+    if stats:
+      detected_clothing_types, counts = np.unique(argmaxes, return_counts=True)
+      max_appearing_clothing_type_count = -1
+      max_appearing_clothing_type = -1
+      for clothing_type in clothing_types:
+        idx = np.where(detected_clothing_types==clothing_type)[0]
+        if len(idx) > 0:
+          idx = idx[0]
+          clothing_type_count = counts[idx]
+          if clothing_type_count > max_appearing_clothing_type_count:
+            max_appearing_clothing_type = clothing_type
+            max_appearing_clothing_type_count = clothing_type_count
   else:
-    print(f'--no {clothing_type} clothing--')
-    return
+    return None
   
   top_y_clothing = max(0, top_y_clothing - BUFFER)
   bottom_y_clothing = min(argmaxes.shape[1] - 1, bottom_y_clothing + BUFFER)
@@ -31,17 +40,25 @@ def extract_person_without_clothing(argmaxes: np.ndarray, clothing_type = 'Upper
   clothing_mask = np.zeros_like(argmaxes, dtype=np.uint8)
   clothing_mask[top_y_clothing:bottom_y_clothing, leftmost_x_clothing:rightmost_x_clothing] = 1
 
-  orig_img = cv2.imread(basedir2 + f.split('.')[0] + '.jpg')
-  print(basedir + f.split('.')[0] + '_.jpg')
-  cv2.imwrite(basedir + f.split('.')[0] + '_.jpg', orig_img)
-  orig_img[clothing_mask == 1] = [128,128,128]
-  cv2.imwrite(basedir + f.split('.')[0] + '.jpg', orig_img)
-  text = f'{top_y_clothing},{bottom_y_clothing},{leftmost_x_clothing},{rightmost_x_clothing}'
-  with open(basedir + f.split('.')[0] +'.txt', 'w') as file: 
-    file.write(text)
+  if img is not None:
+    img[clothing_mask == 1] = [128,128,128]
+    mask_coordinates = (top_y_clothing,bottom_y_clothing,leftmost_x_clothing,rightmost_x_clothing)
+    if stats: 
+      return (img, mask_coordinates, max_appearing_clothing_type)
+    else:
+      return (img, mask_coordinates)
+
+  # orig_img = cv2.imread(basedir2 + f.split('.')[0] + '.jpg')
+  # print(basedir + f.split('.')[0] + '_.jpg')
+  # cv2.imwrite(basedir + f.split('.')[0] + '_.jpg', orig_img)
+  # orig_img[clothing_mask == 1] = [128,128,128]
+  # cv2.imwrite(basedir + f.split('.')[0] + '.jpg', orig_img)
+  # text = f'{top_y_clothing},{bottom_y_clothing},{leftmost_x_clothing},{rightmost_x_clothing}'
+  # with open(basedir + f.split('.')[0] +'.txt', 'w') as file: 
+  #   file.write(text)
 
 
-def run_schp(input_dir:str, output_dir:str, model:str='atr'):
+def generate_raw_schp_values(input_dir:str, output_dir:str, model:str='atr'):
   # schp_script_path = os.path.join(SCHP_ROOT_DIR, 'simple_extractor.py')
   # command = ['python', f'{schp_script_path}', '--dataset', f'{model}', '--model-restore', f'{SCHP_ROOT_DIR}/checkpoints/{model}.pth', '--input-dir', f'{input_dir}', '--output-dir', f'{output_dir}', '--logits']
   command = ['sh', f'{SCHP_SCRIPT_PATH}', SCHP_ROOT_DIR, model, input_dir, output_dir]
@@ -49,10 +66,15 @@ def run_schp(input_dir:str, output_dir:str, model:str='atr'):
   subprocess.run(command)
 
 
-def extract_clothing():
+def extract_clothing(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7]):
   kernel = np.ones((3, 3), dtype=np.uint8)
-  mask = cv2.dilate(mask, kernel, iterations=5)
-  mask = cv2.erode(mask, kernel, iterations=5)
+  clothing_mask = np.where(np.isin(argmaxes, clothing_types))
+  clothing_mask = cv2.dilate(clothing_mask, kernel, iterations=5)
+  clothing_mask = cv2.erode(clothing_mask, kernel, iterations=5)
+  img[clothing_mask != 1] = [128,128,128]
+  return img
+
+  
 
   
 

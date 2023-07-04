@@ -33,7 +33,7 @@ def extract_person_without_clothing(argmaxes: np.ndarray, img:np.ndarray = None,
     return None
   
   top_y_clothing = max(0, top_y_clothing - BUFFER)
-  bottom_y_clothing = min(argmaxes.shape[1] - 1, bottom_y_clothing + BUFFER)
+  bottom_y_clothing = min(argmaxes.shape[0] - 1, bottom_y_clothing + BUFFER)
   leftmost_x_clothing = max(0, leftmost_x_clothing - BUFFER)
   rightmost_x_clothing = min(argmaxes.shape[1] - 1, rightmost_x_clothing + BUFFER)
 
@@ -68,15 +68,16 @@ def generate_raw_schp_values(input_dir:str, output_dir:str, model:str='atr'):
 
 def extract_clothing(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7]):
   kernel = np.ones((3, 3), dtype=np.uint8)
-  clothing_mask = np.where(np.isin(argmaxes, clothing_types))
+  # clothing_mask = np.where(np.isin(argmaxes, clothing_types))
+  clothing_mask = np.isin(argmaxes, clothing_types).astype(np.uint8)
   clothing_mask = cv2.dilate(clothing_mask, kernel, iterations=5)
   clothing_mask = cv2.erode(clothing_mask, kernel, iterations=5)
-  img[clothing_mask != 1] = [128,128,128]
+  img[clothing_mask != 1] = [255,255,255]
   return img
 
-  
 
-  
+def detect_person(argmaxes:np.ndarray) -> bool:
+  return True
 
 # basedir = r'/home/yoni/Desktop/f/demo/outputs/'
 # basedir2 = r'/home/yoni/Desktop/f/demo/inputs/'

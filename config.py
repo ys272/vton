@@ -5,14 +5,23 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
 DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res']
 PREPROCESSED_DATA_VTON_DIR = os.path.join(DATA_DIR, 'processed_data_vton')
-PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection', 'problematic_data']
-
+PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection', 'problematic_data', 'aux']
+sml_dirs = ['person_original']
+sm_dirs = ['person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates']
 dirs = [ROOT_DIR, DATA_DIR, ORIGINAL_DATA_DIR, PREPROCESSED_DATA_VTON_DIR]
 for dir in dirs:
     os.makedirs(dir, exist_ok=True)
 for dir in DATA_SOURCES:
     for sub_dir in PREPROCESSED_DATA_VTON_SUB_DIRS:
-        os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir), exist_ok=True)
+        if sub_dir in sml_dirs:
+            for size in ['s', 'm', 'l']:
+                os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir, size), exist_ok=True)
+        elif sub_dir in sm_dirs:
+            for size in ['s', 'm']:
+                os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir, size), exist_ok=True)
+        else:
+            os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir), exist_ok=True)
+            
 
 '''
 pose model
@@ -42,4 +51,4 @@ schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
 # 'Left-arm': 14, 'Right-arm': 15, 'Bag': 16, 'Scarf': 17}
 
 
-VTON_RESOLUTION = 128
+VTON_RESOLUTION = {'s':(88,128), 'm':(176,256), 'l':(704,1024)}

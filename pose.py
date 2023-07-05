@@ -38,7 +38,7 @@ class PoseModel:
 
 
     def get_keypoints(self, img, num_points=5) -> Union[bool, np.ndarray]:
-        PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.25
+        PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.5
         # Return False if a person isn't detected. Otherwise, return keypoints.
         row_mapper = col_mapper = None
         if img.shape[0] != resolution or img.shape[1] != resolution:

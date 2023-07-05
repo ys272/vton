@@ -77,7 +77,9 @@ def extract_clothing(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types
 
 
 def detect_person(argmaxes:np.ndarray) -> bool:
-  return True
+  # A value of 1 corresponds to head. All the pascal values are:
+  # ['Background', 'Head', 'Torso', 'Upper Arms', 'Lower Arms', 'Upper Legs', 'Lower Legs']
+  return np.count_nonzero(argmaxes==1) > 50
 
 # basedir = r'/home/yoni/Desktop/f/demo/outputs/'
 # basedir2 = r'/home/yoni/Desktop/f/demo/inputs/'

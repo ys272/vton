@@ -43,12 +43,15 @@ schp model
 '''
 SCHP_ROOT_DIR = os.path.join(ROOT_DIR, 'ext-code/Self-Correction-Human-Parsing')
 SCHP_SCRIPT_PATH = os.path.join(ROOT_DIR, 'code/algo/scripts/schp.sh')
+# atr
 schp_labels = ['Background', 'Hat', 'Hair', 'Sunglasses', 'Upper-clothes', 'Skirt', 'Pants', 'Dress', 'Belt', 'Left-shoe', 'Right-shoe', 'Face', 'Left-leg', 'Right-leg', 'Left-arm', 'Right-arm', 'Bag', 'Scarf']
 idx_to_schp_label = {i:label for i,label in enumerate(schp_labels)}
 schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
+# here are the atr values:
 # {'Background': 0, 'Hat': 1, 'Hair': 2, 'Sunglasses': 3, 'Upper-clothes': 4, 'Skirt': 5, 'Pants': 6, 
 # 'Dress': 7, 'Belt': 8, 'Left-shoe': 9, 'Right-shoe': 10, 'Face': 11, 'Left-leg': 12, 'Right-leg': 13, 
 # 'Left-arm': 14, 'Right-arm': 15, 'Bag': 16, 'Scarf': 17}
-
+# here are the pascal values:
+# ['Background', 'Head', 'Torso', 'Upper Arms', 'Lower Arms', 'Upper Legs', 'Lower Legs']
 
 VTON_RESOLUTION = {'s':(88,128), 'm':(176,256), 'l':(704,1024)}

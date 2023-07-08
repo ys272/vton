@@ -1,14 +1,14 @@
 import numpy as np
 import os
 import cv2
-from config import schp_labels, idx_to_schp_label, schp_label_to_idx, SCHP_ROOT_DIR, SCHP_SCRIPT_PATH
+from config import schp_labels, idx_to_schp_label, schp_label_to_idx, SCHP_ROOT_DIR, SCHP_SCRIPT_PATH, VTON_RESOLUTION
 import subprocess
-import torch 
 import random
+import shutil
 
 
 BUFFER = 3
-def extract_person_without_clothing(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+def extract_person_without_clothing_old(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
   '''
   Create a bounding box/rectangle that covers the entire area where the
   clothing currently is (minimum enclosing rectangle).
@@ -51,7 +51,8 @@ def extract_person_without_clothing(argmaxes: np.ndarray, img:np.ndarray = None,
       return (img, mask_coordinates)
 
 
-def extract_person_without_clothing2(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+  import torch
   '''
   Create a bounding box/rectangle that covers the entire area where the
   clothing currently is (minimum enclosing rectangle).
@@ -59,6 +60,11 @@ def extract_person_without_clothing2(filepath_atr: str, img:np.ndarray = None, c
   logits = np.load(filepath_atr, allow_pickle=True)
   atr_argmaxes = np.argmax(logits, axis=-1)
   filepath_densepose = '/'.join(filepath_atr.split('/')[:-2]) + '/densepose/' + filepath_atr.split('/')[-1].split('.')[0] + '.pkl'
+  # if not os.path.exists(filepath_densepose):
+  #   print('***',filepath_densepose)
+  #   cv2.imwrite('/home/yoni/Desktop/e/'+filepath_atr.split('/')[-1].split('.')[0] + '.png', img)
+  #   return None
+  # return None
   with open(filepath_densepose, 'rb') as f:
     densepose_obj = torch.load(f)
   
@@ -67,8 +73,8 @@ def extract_person_without_clothing2(filepath_atr: str, img:np.ndarray = None, c
   Use the densepose segmentation results to find the areas of the image we want to keep (hands and head),
   and the areas we want to discard (arms and torso).
   '''
-  mask_keep_body = np.zeros((256,176))
-  mask_discard_body = np.zeros((256,176))
+  mask_keep_body = np.zeros((VTON_RESOLUTION['m'][1],VTON_RESOLUTION['m'][0]))
+  mask_discard_body = np.zeros((VTON_RESOLUTION['m'][1],VTON_RESOLUTION['m'][0]))
   for num_bbox in range(num_bboxes_detected):
     # results are ordered as (col,row); which is the opposite of the (row,col) ordering of np/opencv
     bbox = densepose_obj['pred_boxes_XYXY'][num_bbox].cpu()
@@ -78,11 +84,15 @@ def extract_person_without_clothing2(filepath_atr: str, img:np.ndarray = None, c
     hands_and_head = np.where(np.isin(densepose, [3,4,23,24]))
     hands_and_head_rows = hands_and_head[0] + row_offset
     hands_and_head_cols = hands_and_head[1] + col_offset
+    hands_and_head_rows[hands_and_head_rows >= VTON_RESOLUTION['m'][1]] = VTON_RESOLUTION['m'][1]-1
+    hands_and_head_cols[hands_and_head_cols >= VTON_RESOLUTION['m'][0]] = VTON_RESOLUTION['m'][0]-1
     mask_keep_body[hands_and_head_rows, hands_and_head_cols]=1
     
     torso_and_arms = np.where(np.isin(densepose, [1,2,15,16,17,18,19,20,21,22]))
     torso_and_arms_rows = torso_and_arms[0] + row_offset
     torso_and_arms_cols = torso_and_arms[1] + col_offset
+    torso_and_arms_rows[torso_and_arms_rows >= VTON_RESOLUTION['m'][1]] = VTON_RESOLUTION['m'][1]-1
+    torso_and_arms_cols[torso_and_arms_cols >= VTON_RESOLUTION['m'][0]] = VTON_RESOLUTION['m'][0]-1
     mask_discard_body[torso_and_arms_rows, torso_and_arms_cols]=1
       
   mask_keep_body = mask_keep_body.astype(np.uint8)
@@ -112,15 +122,21 @@ def extract_person_without_clothing2(filepath_atr: str, img:np.ndarray = None, c
   buffer = random.randint(2,4)
   
   indices_discard_body = np.where(mask_discard_body)
-  top_y_body = np.min(indices_discard_body[0])
-  bottom_y_body = np.max(indices_discard_body[0])
-  leftmost_x_body = np.min(indices_discard_body[1])
-  rightmost_x_body = np.max(indices_discard_body[1])
+  if len(indices_discard_body[0]):
+    top_y_body = np.min(indices_discard_body[0])
+    bottom_y_body = np.max(indices_discard_body[0])
+    leftmost_x_body = np.min(indices_discard_body[1])
+    rightmost_x_body = np.max(indices_discard_body[1])
   
-  top_y_discard = min(top_y_clothing, top_y_body)
-  bottom_y_discard = max(bottom_y_clothing, bottom_y_body)
-  leftmost_x_discard = min(leftmost_x_clothing, leftmost_x_body)
-  rightmost_x_discard = max(rightmost_x_clothing, rightmost_x_body)
+    top_y_discard = min(top_y_clothing, top_y_body)
+    bottom_y_discard = max(bottom_y_clothing, bottom_y_body)
+    leftmost_x_discard = min(leftmost_x_clothing, leftmost_x_body)
+    rightmost_x_discard = max(rightmost_x_clothing, rightmost_x_body)
+  else:
+    top_y_discard = top_y_clothing
+    bottom_y_discard = bottom_y_clothing
+    leftmost_x_discard = leftmost_x_clothing
+    rightmost_x_discard = rightmost_x_clothing
   
   top_y_discard = max(0, top_y_discard - buffer)
   bottom_y_discard = min(atr_argmaxes.shape[0] - 1, bottom_y_discard + buffer)

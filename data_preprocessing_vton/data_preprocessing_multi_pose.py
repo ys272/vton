@@ -90,7 +90,7 @@ def preprocess_pose():
                                     person_img_path = os.path.join(training_sample_dir, filename)
                                     person_img_medium = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=person_img_path)
                                     person_img_large = resize_img(c.VTON_RESOLUTION['l'][0], c.VTON_RESOLUTION['l'][1], input_img_path=person_img_path)
-                                    keypoints = pose_model.get_keypoints(person_img_medium, num_points=3)
+                                    keypoints = pose_model.get_keypoints(person_img_medium)
                                     training_sample_id = f'{data_source_acronym}_{dir_number}_{training_sample_num}'
                                     if not keypoints:
                                         log_file.write(f'no keypoints, {dir_number}\n')
@@ -209,8 +209,8 @@ def preprocess_schp(clothing_types:list):
 def remove_duplicates():
     sizes = []
     filenames = []
-    for filename in tqdm(os.listdir(person_original_dir)):
-        path = os.path.join(person_original_dir, filename)
+    for filename in tqdm(os.listdir(os.path.join(person_original_dir, 'm'))):
+        path = os.path.join(person_original_dir, 'm', filename)
         filenames.append(filename)
         sizes.append(os.path.getsize(path))
 
@@ -225,10 +225,10 @@ def remove_duplicates():
         # Because the size array (in which we search for unique integers) was sorted, we know that the files in the range
         # below all have the same (compressed) byte size, so we should compare them all to each other for equality.
         for i in range(first_indices_where_unique_size_appears[starting_index_for_this_unique_size], first_indices_where_unique_size_appears[starting_index_for_this_unique_size+1]):
-            first_image = cv2.imread(os.path.join(person_original_dir, filenames[i]))
+            first_image = cv2.imread(os.path.join(person_original_dir, 'm', filenames[i]))
             # Compare `first_image` to all the images that follow it (that have the same size).
             for j in range(i+1, first_indices_where_unique_size_appears[starting_index_for_this_unique_size+1]):
-                second_image = cv2.imread(os.path.join(person_original_dir, filenames[j]))
+                second_image = cv2.imread(os.path.join(person_original_dir, 'm', filenames[j]))
                 if np.all(first_image == second_image):
                     # If identical, remove the first one.
                     duplicates_to_remove.add(filenames[i].split('.')[0])
@@ -239,6 +239,7 @@ def remove_duplicates():
     img_dirs_to_modify = [person_original_dir, clothing_dir_front, clothing_dir_flat]
     txt_dirs_to_modify = [pose_keypoints_dir]
     for training_sample_id in duplicates_to_remove:
+        continue
         remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
         
         
@@ -272,7 +273,7 @@ def filter_non_persons():
     img_dirs_to_modify = [person_original_dir, clothing_dir_front, clothing_dir_flat, clothing_dir, person_with_masked_clothing_dir]
     txt_dirs_to_modify = [pose_keypoints_dir, mask_coordinates_dir]
     with open(log_person_detection_file_path, 'w') as log_file:
-        for filename in os.listdir(schp_raw_output_dir_pascal_person):
+        for filename in tqdm(os.listdir(schp_raw_output_dir_pascal_person)):
             if filename.split('.')[1] != 'npy':
                 continue
             filepath = os.path.join(schp_raw_output_dir_pascal_person, filename)
@@ -287,18 +288,28 @@ def filter_non_persons():
                     save_problematic_data(training_sample_id, person_img_medium, schp_img=schp_img)
                 except:
                     pass
-                remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
+                # remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
+                
+                # Rather than remove everything filter_non_persons flags, only remove the files that have been vetted and saved in a designated file.
+                # with open('/home/yoni/Desktop/f/other/delete for multi pose.txt', 'r') as f:
+                #     for line in f.readlines():
+                #         training_sample_id = line.strip().split(' ')[-1]
+                #         print(training_sample_id)
+                #         person_original_m_dir = os.path.join(person_original_dir, 'm')
+                #         img_dirs_to_modify = [person_original_dir, clothing_dir_front, clothing_dir_flat, clothing_dir, person_with_masked_clothing_dir]
+                #         txt_dirs_to_modify = [pose_keypoints_dir, mask_coordinates_dir]
+                #         remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
 
 
 def preprocess():            
     processes = [
-    #    multiprocessing.Process(target=preprocess_pose),
+       multiprocessing.Process(target=preprocess_pose),
     #    multiprocessing.Process(target=remove_duplicates),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(clothing_dir_front, schp_raw_output_dir_atr_front), kwargs={'model':'atr'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
     #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
-       multiprocessing.Process(target=filter_non_persons),
+    #    multiprocessing.Process(target=filter_non_persons),
     ]
     for process in processes:
         process.start()

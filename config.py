@@ -53,5 +53,8 @@ schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
 # 'Left-arm': 14, 'Right-arm': 15, 'Bag': 16, 'Scarf': 17}
 # here are the pascal values:
 # ['Background', 'Head', 'Torso', 'Upper Arms', 'Lower Arms', 'Upper Legs', 'Lower Legs']
-
+# here are the dense pose values:
+# 1, 2 = Torso, 3 = Right Hand, 4 = Left Hand, 5 = Left Foot, 6 = Right Foot, 7, 9 = Upper Leg Right,
+# 8, 10 = Upper Leg Left, 11, 13 = Lower Leg Right, 12, 14 = Lower Leg Left, 15, 17 = Upper Arm Left,
+# 16, 18 = Upper Arm Right, 19, 21 = Lower Arm Left, 20, 22 = Lower Arm Right, 23, 24 = Head
 VTON_RESOLUTION = {'s':(88,128), 'm':(176,256), 'l':(704,1024)}

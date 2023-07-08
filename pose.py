@@ -37,7 +37,7 @@ class PoseModel:
         return True
 
 
-    def get_keypoints(self, img, num_points=5) -> Union[bool, np.ndarray]:
+    def get_keypoints(self, img, num_points=3) -> Union[bool, np.ndarray]:
         PERSON_DETECTION_CONFIDENCE_THRESHOLD = 0.5
         # Return False if a person isn't detected. Otherwise, return keypoints.
         row_mapper = col_mapper = None
@@ -86,12 +86,13 @@ class PoseModel:
 
 
 if __name__ == '__main__':
-    img_dir = r'/home/yoni/Desktop/f/demo/inputs'
-    output_dir = r'/home/yoni/Desktop/f/demo/outputs'        
+    img_dir = r'/home/yoni/Desktop/input'
+    output_dir = r'/home/yoni/Desktop/output'        
     new_width = resolution
     new_height = resolution
-
-    for img_filename in os.listdir(img_dir):
+    pose_model = PoseModel()
+    
+    for i,img_filename in enumerate(os.listdir(img_dir)):
         # Load the input image.
         input_image_path = os.path.join(img_dir, img_filename)
 
@@ -107,22 +108,22 @@ if __name__ == '__main__':
         # Resize and pad the image to keep the aspect ratio and fit the expected size.
         image = tf.cast(tf.image.resize_with_pad(image, new_width, new_height), dtype=tf.int32)
         # Run model inference.
-        pose_model = PoseModel()
         outputs = pose_model.movenet(image)
         # Output is a [1, 1, 17, 3] tensor.
         keypoints = outputs['output_0']
         # List of coordinates (x, y) where you want to draw circles
         THRESHOLD = 0.5
         coords = [(int(k[1]*resolution),int(k[0]*resolution)) for k in keypoints[0][0].numpy() if k[2] > THRESHOLD]
-        if len(coords) < 5:
-            continue
-        print(img_filename, len(coords))
+        # if len(coords) < 5:
+        #     continue
+        # print(img_filename, len(coords))
         # Define the color (Aqua in BGR format)
         color = (255, 255, 0)
         # Draw circles on the image at the given coordinates
         # breakpoint()
         for coord in coords:
             cv2.circle(resized_image, coord, radius=2, color=color, thickness=-1)
-        output_image_path = os.path.join(output_dir, f'circles_{img_filename}')
+        # output_image_path = os.path.join(output_dir, f'circles_{img_filename}')
+        output_image_path = os.path.join(output_dir, f'{i}.jpg')
         # Save the resulting image with drawn circles
         cv2.imwrite(output_image_path, resized_image)

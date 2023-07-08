@@ -27,8 +27,10 @@ log_pose_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_
 log_schp_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_schp.txt')
 log_person_detection_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_person_detection.txt')
 
-# schp_raw_output_dir_pascal_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'pascal_person')
-# os.makedirs(schp_raw_output_dir_pascal_person, exist_ok=True)
+schp_raw_output_dir_atr_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'atr_person')
+schp_raw_output_dir_pascal_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'pascal_person')
+os.makedirs(schp_raw_output_dir_atr_person, exist_ok=True)
+os.makedirs(schp_raw_output_dir_pascal_person, exist_ok=True)
 
 
 def preprocess_pose():
@@ -109,13 +111,13 @@ def preprocess_schp(clothing_types:list):
        saved_for_inspection = pickle.load(file)
     
     with open(log_schp_file_path, 'w') as log_file:
-       for filename in tqdm(os.listdir(schp_raw_output_dir)):
+       for filename in tqdm(os.listdir(schp_raw_output_dir_atr_person)):
           if filename.split('.')[1] != 'npy':
              continue
           training_sample_id = filename.split('.')[0]
         #   if training_sample_id != 'sp2p_16599_25':
         #      continue
-          filepath = os.path.join(schp_raw_output_dir, filename)
+          filepath = os.path.join(schp_raw_output_dir_atr_person, filename)
           logits = np.load(filepath, allow_pickle=True)
           argmaxes = np.argmax(logits, axis=-1)
           img_filename = training_sample_id + '.jpg'
@@ -130,7 +132,7 @@ def preprocess_schp(clothing_types:list):
             os.remove(person_original_img_save_path)
             os.remove(clothing_img_save_path)
             os.remove(pose_keypoints_save_path)
-            schp_img = cv2.imread(os.path.join(schp_raw_output_dir, training_sample_id+'.png'))
+            schp_img = cv2.imread(os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png'))
             save_problematic_data(training_sample_id, original_img, schp_img=schp_img)
             continue
           # If we successfully extracted the person from the image, save the data.
@@ -169,6 +171,7 @@ def count_lines(filename):
 def remove_duplicates():
     sizes = []
     filenames = []
+    # Get the *compressed* size.
     for filename in tqdm(os.listdir(os.path.join(person_original_dir, 'm'))):
         path = os.path.join(person_original_dir, 'm', filename)
         filenames.append(filename)
@@ -203,36 +206,14 @@ def remove_duplicates():
         for txt_dir_to_modify in txt_dirs_to_modify:
             os.remove(os.path.join(txt_dir_to_modify, 'm', training_sample_id + '.txt'))
             
-
-def filter_non_persons():
-    person_original_m_dir = os.path.join(person_original_dir, 'm')
-    img_dirs_to_modify = [person_original_dir, clothing_dir, mask_coordinates_dir, person_with_masked_clothing_dir]
-    txt_dirs_to_modify = [pose_keypoints_dir]
-    with open(log_person_detection_file_path, 'w') as log_file:
-        for filename in os.listdir(schp_raw_output_dir_pascal_person):
-            if filename.split('.')[1] != 'npy':
-                continue
-            filepath = os.path.join(schp_raw_output_dir_pascal_person, filename)
-            logits = np.load(filepath, allow_pickle=True)
-            argmaxes = np.argmax(logits, axis=-1)
-            if not detect_person(argmaxes):
-                training_sample_id = filename.split('.')[0]
-                log_file.write(f'no person {training_sample_id}\n')
-                person_img_medium = cv2.imread(os.path.join(person_original_m_dir, training_sample_id+'.jpg'))
-                schp_img = cv2.imread(os.path.join(schp_raw_output_dir_pascal_person, training_sample_id+'.png'))
-                try:
-                    save_problematic_data(training_sample_id, person_img_medium, schp_img=schp_img)
-                except:
-                    pass
-                # remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
-                
-                
+               
 def preprocess():
     processes = [
-       multiprocessing.Process(target=preprocess_pose),
-       multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir)),
-       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
-       multiprocessing.Process(target=remove_duplicates),
+    #    multiprocessing.Process(target=preprocess_pose),
+    #    multiprocessing.Process(target=remove_duplicates),
+    #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person)),
+    #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
+    #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
     ]
     
     for process in processes:

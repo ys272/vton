@@ -62,7 +62,7 @@ def preprocess_pose():
             person_imgs_and_keypoints = []
             for person_img_path in person_img_paths:
                 person_img_path = os.path.join(training_sample_dir, person_img_path)
-                person_img_medium = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=person_img_path)
+                person_img_medium = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=person_img_path)
                 keypoints = pose_model.get_keypoints(person_img_medium)
                 if not keypoints:
                    log_file.write(f'no keypoints, {dir_number}\n')
@@ -72,7 +72,7 @@ def preprocess_pose():
                    person_imgs_and_keypoints.append((person_img_medium, keypoints))
             
             clothing_img_path = os.path.join(training_sample_dir, 'target.jpg')
-            clothing_img = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=clothing_img_path)
+            clothing_img = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=clothing_img_path)
             save_for_inspection = random() < 0.02
             for (img,keypoints) in person_imgs_and_keypoints:
                 training_sample_id = f'{data_source_acronym}_{dir_number}_{training_sample_num}'

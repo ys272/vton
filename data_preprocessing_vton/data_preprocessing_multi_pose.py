@@ -78,16 +78,16 @@ def preprocess_pose():
                                 training_sample_img_type = filename.split('_')[-1].split('.')[0]
                                 if training_sample_img_type == 'flat':
                                     flat_img_path = os.path.join(training_sample_dir, filename)
-                                    flat_img = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=flat_img_path)
+                                    flat_img = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=flat_img_path)
                                 elif training_sample_img_type == 'front':
                                     front_img_path = os.path.join(training_sample_dir, filename)
-                                    front_img = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=front_img_path)
+                                    front_img = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=front_img_path)
                             for filename in training_sample_set:
                                 training_sample_img_type = filename.split('_')[-1].split('.')[0]
                                 if training_sample_img_type != 'flat' and training_sample_img_type != 'front':
                                     person_img_path = os.path.join(training_sample_dir, filename)
-                                    person_img_medium = resize_img(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1], input_img_path=person_img_path)
-                                    person_img_large = resize_img(c.VTON_RESOLUTION['l'][0], c.VTON_RESOLUTION['l'][1], input_img_path=person_img_path)
+                                    person_img_medium = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=person_img_path)
+                                    person_img_large = resize_img(c.VTON_RESOLUTION['l'][1], c.VTON_RESOLUTION['l'][0], input_img_path=person_img_path)
                                     keypoints = pose_model.get_keypoints(person_img_medium)
                                     training_sample_id = f'{data_source_acronym}_{dir_number}_{training_sample_num}'
                                     if not keypoints:

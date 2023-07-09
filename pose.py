@@ -69,9 +69,6 @@ class PoseModel:
 
 
     def save_or_return_img_w_overlaid_keypoints(self, img, keypoint_coords, output_path=None, return_value=False):
-        # This assumes the image is a square
-        # scale_factor_0 = img.shape[0] / resolution
-        # scale_factor_1 = img.shape[1] / resolution
         # Draw circles on the image at the given coordinates
         for coord in keypoint_coords:
             if coord is not None:

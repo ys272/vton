@@ -55,7 +55,9 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
   import torch
   '''
   Create a bounding box/rectangle that covers the entire area where the
-  clothing currently is (minimum enclosing rectangle).
+  clothing, torso and arms are (minimum enclosing rectangle).
+  The area in the bounding box will be masked out, except for parts of the bounding box that
+  overlap with the head, hands, sunglasses, bags and hat.
   '''
   logits = np.load(filepath_atr, allow_pickle=True)
   atr_argmaxes = np.argmax(logits, axis=-1)
@@ -147,6 +149,7 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
   mask_discard_final[top_y_discard:bottom_y_discard, leftmost_x_discard:rightmost_x_discard] = 1
 
   if img is not None:    
+    # TODO: Try adding bag (index=16)
     atr_alone = [1,3] # hat, sunglasses
     # atr_hair = 2
     atr_w_densepose=[11,14,15] # face, left arm, right arm
@@ -158,7 +161,6 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
     
     mask_discard_final[use_original_values==1] = 0
     img[mask_discard_final==1] = [128,128,128]
-
     
     if stats: 
       return (img, mask_discard_final, max_appearing_clothing_type)
@@ -167,10 +169,7 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
 
 
 def generate_raw_schp_values(input_dir:str, output_dir:str, model:str='atr'):
-  # schp_script_path = os.path.join(SCHP_ROOT_DIR, 'simple_extractor.py')
-  # command = ['python', f'{schp_script_path}', '--dataset', f'{model}', '--model-restore', f'{SCHP_ROOT_DIR}/checkpoints/{model}.pth', '--input-dir', f'{input_dir}', '--output-dir', f'{output_dir}', '--logits']
-  command = ['sh', f'{SCHP_SCRIPT_PATH}', SCHP_ROOT_DIR, model, input_dir, output_dir]
-  
+  command = ['sh', f'{SCHP_SCRIPT_PATH}', SCHP_ROOT_DIR, model, input_dir, output_dir]  
   subprocess.run(command)
 
 

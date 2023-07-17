@@ -25,8 +25,7 @@ problematic_data_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_di
 log_pose_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_pose.txt')
 log_schp_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_schp.txt')
 log_person_detection_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_person_detection.txt')
-
-
+schp_raw_output_dir_lip_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'lip_person')
 clothing_dir_flat = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'aux', 'flat')
 clothing_dir_front = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'aux', 'front')
 schp_raw_output_dir_pascal_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'pascal_person')
@@ -37,6 +36,7 @@ os.makedirs(clothing_dir_front, exist_ok=True)
 os.makedirs(schp_raw_output_dir_pascal_person, exist_ok=True)
 os.makedirs(schp_raw_output_dir_atr_front, exist_ok=True)
 os.makedirs(schp_raw_output_dir_atr_person, exist_ok=True)
+os.makedirs(schp_raw_output_dir_lip_person, exist_ok=True)
 
 
 upper_body_clothing_categories = ['Jackets_Vests', 'Shirts_Polos', 'Suiting', 'Sweaters', 'Sweatshirts_Hoodies', 'Tees_Tanks', 'Blouses_Shirts', 'Cardigans', 'Dresses', 'Graphic_Tees', 'Jackets_Coats', 'Rompers_Jumpsuits', 'Sweaters']
@@ -148,8 +148,8 @@ def preprocess_schp(clothing_types:list):
             log_file.write(f'no clothing, {filename}\n')
             schp_img = cv2.imread(os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png'))
             save_problematic_data(training_sample_id, original_img, schp_img=schp_img)
-            # Delete the data that was saved so far for this training sample, as it cannot be used without the schp masking.
             continue
+            # Delete the data that was saved so far for this training sample, as it cannot be used without the schp masking.
             person_original_img_save_path_large = os.path.join(person_original_dir, 'l', img_filename)
             person_original_img_save_path_medium = os.path.join(person_original_dir, 'm', img_filename)
             clothing_img_save_path = os.path.join(clothing_dir, f'{training_sample_id}.jpg')
@@ -190,6 +190,7 @@ def preprocess_schp(clothing_types:list):
           np.save(mask_coordinates_path, mask_coordinates)
           cv2.imwrite(masked_img_path, masked_img)
           clothing_count[max_appearing_clothing_type] += 1
+          
           if training_sample_id+'_person_original.jpg' in saved_for_inspection:
             inspection_path_person_masked = os.path.join(inspection_dir, f'{training_sample_id}_person_masked.jpg')
             cv2.imwrite(inspection_path_person_masked, masked_img)
@@ -301,6 +302,7 @@ def preprocess():
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(clothing_dir_front, schp_raw_output_dir_atr_front), kwargs={'model':'atr'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
+    # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
     #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
     #    multiprocessing.Process(target=filter_non_persons),
     ]

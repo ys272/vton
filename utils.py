@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from typing import Tuple, List
+from random import uniform
 
 
 def resize_img(target_width:int, target_height:int, input_img_path:str = None, img=None, get_mapping_from_new_to_old_img=False) -> np.ndarray:
@@ -56,3 +57,4 @@ def count_lines(filename):
     with open(filename, 'r') as file:
         lines = file.readlines()
         return len(lines)
+    

@@ -26,6 +26,30 @@ base_dir2 = '/home/yoni/Desktop/processed_data_vton/same_person_two_poses/person
 # diff_training_sample_ids_btwn_dirs(base_dir, base_dir2)    
 
 
+def improve_contrast_if_very_light(clothing_img, person_original_img):
+    is_very_light_clothing = np.mean(clothing_img[clothing_img.shape[0]//2-10:clothing_img.shape[0]//2+10, clothing_img.shape[1]//2-10:clothing_img.shape[1]//2+10]) > 200
+    if is_very_light_clothing:
+        # Random contrast adjustment
+        beta = -5#uniform(-10,-20)
+        # Random contrast multiplier
+        alpha = 1#uniform(0.75, 1.1)
+        
+        clothing_img = cv2.convertScaleAbs(clothing_img, alpha=alpha, beta=beta)
+        person_original_img = cv2.convertScaleAbs(person_original_img, alpha=alpha, beta=beta)
+    return clothing_img, person_original_img
+    
+
+def improve_contrast_process(clothing_dir, person_original_dir):
+    for filename in tqdm(os.listdir(clothing_dir)):
+        clothing_img_path = os.path.join(clothing_dir, filename)
+        person_original_img_path = os.path.join(person_original_dir, filename)
+        clothing_img = cv2.imread(clothing_img_path)
+        person_original_img = cv2.imread(person_original_img_path)
+        clothing_img, person_original_img = improve_contrast_if_very_light(clothing_img, person_original_img)
+        cv2.imwrite(clothing_img_path, clothing_img)
+        cv2.imwrite(person_original_img_path, person_original_img)
+        
+        
 new_height = VTON_RESOLUTION['s'][0]
 new_width = VTON_RESOLUTION['s'][1]
 def downsample_mask_arr(arr):
@@ -141,7 +165,7 @@ def create_final_dataset_vton_s_to_s():
   # from an original training sample, coming from a particular data source.
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
-  prob_aug = {'misc_online': 1, 'multi_pose': 0.05, 'paired_high_res':0, 'same_person_two_poses':0.1}
+  prob_aug = {'misc_online': 1, 'multi_pose': 0.1, 'paired_high_res':0, 'same_person_two_poses':0.15}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:
@@ -177,7 +201,7 @@ def create_final_dataset_vton_s_to_s():
                 cv2.circle(person_for_keypoints_img, coord, radius=2, color=COLOR_AQUA, thickness=-1)
             cv2.imwrite(person_with_keypoints_filepath_final, person_for_keypoints_img)
       
-      for person_original_filename in os.listdir(person_original_dir):
+      for person_original_filename in tqdm(os.listdir(person_original_dir)):
         training_sample_id_original = person_original_filename.split('.')[0]
         person_original_filepath = os.path.join(person_original_dir, training_sample_id_original + '.jpg')
         clothing_filepath = os.path.join(clothing_dir, training_sample_id_original + '.jpg')
@@ -231,25 +255,3 @@ def create_final_dataset_vton_s_to_s():
 
 
 create_final_dataset_vton_s_to_s()
-
-
-
-# def aa(img):
-#   contrast_image = cv2.flip(img, 1)
-#   if random() < 0.5:
-#     alpha = uniform(0.5, 0.75)
-#   else:
-#     alpha = uniform(1.25, 1.5)
-#   # Random contrast adjustment between -30 and 30
-#   beta = uniform(-30, 30)
-#   contrast_image = cv2.convertScaleAbs(contrast_image, alpha=alpha, beta=beta)
-
-#   # Display the original and contrast-modified images
-#   cv2.imshow("Original Image", img)
-#   cv2.imshow("Contrast Modified Image", contrast_image)
-#   cv2.waitKey(0)
-#   cv2.destroyAllWindows()
-
-# for img in os.listdir('/home/yoni/Desktop/n/'):
-#   img = cv2.imread('/home/yoni/Desktop/n/'+img)
-#   aa(img)

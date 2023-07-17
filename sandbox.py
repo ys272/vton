@@ -9,8 +9,73 @@ import config as c
 from pose import PoseModel
 from schp import extract_person_without_clothing
 import torch
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
+
+# Build the neural network, expand on top of nn.Module
+class Network(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+    # define layers
+    self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5, padding='same') #28
+    self.conv2 = nn.Conv2d(in_channels=32, out_channels=48, kernel_size=5) #24
+    self.conv3 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=5, padding='same') # 12 (post max pool)
+    self.conv4 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=5) # 8
+    self.conv5 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=5) # 4
+
+    self.fc1 = nn.Linear(in_features=48*4*4, out_features=120)
+    self.fc2 = nn.Linear(in_features=120, out_features=60)
+    self.out = nn.Linear(in_features=60, out_features=10)
+   
+
+  # define forward function
+  def forward(self, t):
+    # conv 1
+    t = self.conv1(t)
+    t = F.relu(t)
+    t = self.conv2(t)
+    t = F.relu(t)
+    t = F.max_pool2d(t, kernel_size=2, stride=2) #24->12
+
+    t = self.conv3(t)
+    t = F.relu(t)
+    t = self.conv4(t)
+    t = F.relu(t)
+    # t = F.max_pool2d(t, kernel_size=2, stride=2) 
+    
+    t = self.conv5(t)
+    t = F.relu(t)
+
+    # fc1
+    t = t.reshape(-1, 48*4*4)
+    # t = t.reshape(-1, 4*4*4)
+    t = self.fc1(t)
+    t = F.relu(t)
+
+    # fc2
+    t = self.fc2(t)
+    t = F.relu(t)
+
+    # output
+    t = self.out(t)
+    # don't need softmax here since we'll use cross-entropy as activation.
+
+    return t
+
+
+network = Network()
+
+checkpoint = torch.load('/home/yoni/Desktop/f/model_output/network_params/model_clothing_type_detect_good.pth')
+network.load_state_dict(checkpoint['model_state_dict'])
+network.eval()
+inputs = ...  # Your input data
+predictions = network(inputs)
+
+print('d')
 
 # base_dir = '/home/yoni/Desktop/processed_data_vton/multi_pose/person_original/m3'
 # listoffiles = os.listdir(base_dir)

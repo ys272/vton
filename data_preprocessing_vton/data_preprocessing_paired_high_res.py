@@ -9,6 +9,7 @@ from random import random
 import multiprocessing
 import pickle
 from tqdm import tqdm
+from data_processing_utils import improve_contrast_process
 
 
 data_source_acronym = 'pairedhigh'
@@ -113,8 +114,6 @@ def preprocess_schp(clothing_types:list):
             masked_img_path = os.path.join(person_with_masked_clothing_dir, 'm', img_filename)
             mask_coordinates_path = os.path.join(mask_coordinates_dir, 'm', training_sample_id + '.npy')
             np.save(mask_coordinates_path, mask_coordinates)
-            # with open(mask_coordinates_path, 'w') as f:
-            #     f.write(str(mask_coordinates))
             cv2.imwrite(masked_img_path, masked_img)
             clothing_count[max_appearing_clothing_type] += 1
             
@@ -188,6 +187,7 @@ def remove_duplicates():
             if os.path.exists(filename):
                 os.remove(filename)
             
+        
                
 def preprocess():
     processes = [
@@ -195,7 +195,7 @@ def preprocess():
     #    multiprocessing.Process(target=remove_duplicates),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
-       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
+    #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
     ]
     
     for process in processes:

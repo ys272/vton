@@ -8,7 +8,7 @@ import shutil
 
 
 BUFFER = 3
-def extract_person_without_clothing_old(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+def extract_person_without_clothing_extra_old(argmaxes: np.ndarray, img:np.ndarray = None, clothing_types = [4,7], stats=False):
   '''
   Create a bounding box/rectangle that covers the entire area where the
   clothing currently is (minimum enclosing rectangle).
@@ -51,7 +51,90 @@ def extract_person_without_clothing_old(argmaxes: np.ndarray, img:np.ndarray = N
       return (img, mask_coordinates)
 
 
-def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+NUM_PIXELS_COAT_THRESHOLD = 1000
+def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, clothing_types = [5,6,7,10], stats=False):
+  import torch
+  
+  # Use atr to start by discarding upper clothes and dresses.
+  logits = np.load(filepath_atr, allow_pickle=True)
+  atr_argmaxes = np.argmax(logits, axis=-1)
+  clothing_types = [4,7] # upper clothes and dresses
+  mask_discard = np.isin(atr_argmaxes, clothing_types)
+  indices_discard_clothing = np.where(mask_discard)
+  if len(indices_discard_clothing[0]) == 0:
+    return None
+  mask_discard = mask_discard.astype(np.uint8)
+  # if filepath_atr.split('.')[0].split('/')[-1] == 'misconline_1_304':
+  #   print('f')
+  
+  # Use lip to see if there's a coat present. If it is (and it is more common than the upper clothes, implying that
+  # it is probably the target clothing), only mask out the coat, but not the upper clothes.
+  # filepath_lip = filepath_atr.replace('atr_person', 'lip_person')
+  # logits = np.load(filepath_lip, allow_pickle=True)
+  # lip_argmaxes = np.argmax(logits, axis=-1)
+  # num_coat_pixels = np.count_nonzero(lip_argmaxes==7)
+  # if num_coat_pixels > NUM_PIXELS_COAT_THRESHOLD:
+  #   mask_upper_clothes = lip_argmaxes==5
+  #   num_upper_clothes_pixels = np.count_nonzero(mask_upper_clothes)
+  #   if num_coat_pixels > num_upper_clothes_pixels:
+  #     # Do not discard pixels belonging to upper clothes.
+  #     mask_discard[mask_upper_clothes] = 0
+    
+  # Erode and dilate the areas we want to discard.
+  kernel = np.ones((3, 3), dtype=np.uint8)
+  num_dilations = random.randint(2,5)
+  mask_discard = cv2.erode(mask_discard, kernel, iterations= 3)
+  mask_discard = cv2.dilate(mask_discard, kernel, iterations= 3 + num_dilations)
+  
+  # Use the densepose segmentation results to find the hands and make sure they're not removed.  
+  filepath_densepose = '/'.join(filepath_atr.split('/')[:-2]) + '/densepose/' + filepath_atr.split('/')[-1].split('.')[0] + '.pkl'
+  with open(filepath_densepose, 'rb') as f:
+    densepose_obj = torch.load(f)
+  num_bboxes_detected = len(densepose_obj['pred_boxes_XYXY'])
+  mask_keep_body = np.zeros((VTON_RESOLUTION['m'][0],VTON_RESOLUTION['m'][1]))
+  for num_bbox in range(num_bboxes_detected):
+    # results are ordered as (col,row); which is the opposite of the (row,col) ordering of np/opencv
+    bbox = densepose_obj['pred_boxes_XYXY'][num_bbox].cpu()
+    row_offset = round(bbox[1].item())
+    col_offset = round(bbox[0].item())
+    densepose = densepose_obj['pred_densepose'][num_bbox].labels.cpu()
+    hands = np.where(np.isin(densepose, [3,4]))
+    hands_rows = hands[0] + row_offset
+    hands_cols = hands[1] + col_offset
+    hands_rows[hands_rows >= VTON_RESOLUTION['m'][0]] = VTON_RESOLUTION['m'][0]-1
+    hands_cols[hands_cols >= VTON_RESOLUTION['m'][1]] = VTON_RESOLUTION['m'][1]-1
+    mask_keep_body[hands_rows, hands_cols]=1
+  
+  atr_w_densepose=[14,15] # left arm, right arm
+  mask_keep_body = mask_keep_body.astype(np.uint8)
+  mask_keep_body = mask_keep_body & np.isin(atr_argmaxes,atr_w_densepose)    
+  
+  img[(mask_discard==1) & (mask_keep_body==0)] = [128,128,128]
+  
+  
+  if stats:
+    detected_clothing_types, counts = np.unique(atr_argmaxes, return_counts=True)
+    max_appearing_clothing_type_count = -1
+    max_appearing_clothing_type = -1
+    for clothing_type in clothing_types:
+      idx = np.where(detected_clothing_types==clothing_type)[0]
+      if len(idx) > 0:
+        idx = idx[0]
+        clothing_type_count = counts[idx]
+        if clothing_type_count > max_appearing_clothing_type_count:
+          max_appearing_clothing_type = clothing_type
+          max_appearing_clothing_type_count = clothing_type_count
+      
+  if stats: 
+      return (img, mask_discard, max_appearing_clothing_type)
+  else:
+      return (img, mask_discard)
+
+
+  
+
+
+def extract_person_without_clothing_old(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
   import torch
   '''
   Create a bounding box/rectangle that covers the entire area where the

@@ -66,4 +66,17 @@ VTON_RESOLUTION = {'s':(128,88), 'm':(256,176), 'l':(1024,704)}
 '''
 diffusion params
 '''
-timesteps = 256
+NUM_TIMESTEPS = 1000
+
+MIN_NORMALIZED_VALUE = -1
+MAX_NORMALIZED_VALUE = 1
+
+REVERSE_DIFFUSION_SAMPLER = 'ddpm'
+
+
+'''
+General
+'''
+
+DEVICE = 'cuda'
+BATCH_SIZE = 32

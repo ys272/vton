@@ -3,8 +3,8 @@ import os
 import cv2
 import config as c
 from utils import resize_img
-from pose import PoseModel
-from schp import generate_raw_schp_values, extract_person_without_clothing, detect_person
+from data_preprocessing_vton.pose import PoseModel
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, detect_person
 from random import random
 import multiprocessing
 import pickle

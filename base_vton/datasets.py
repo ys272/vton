@@ -22,32 +22,32 @@ if False:
 
 # Step 4: Load the NPZ file and separate it into train and test sets
 loaded_data = np.load('/home/yoni/Desktop/f/other/fashion_mnist_data/fashion_mnist_dataset.npz')
-full_dataset = loaded_data['data']
+full_dataset = loaded_data['data'].astype(np.float16)
 full_labels = loaded_data['labels']
+
+# normalize from [0,255] to [-0.5, 0.5]
+full_dataset /= 255
+full_dataset -= 0.5
+# full_dataset *= 2 # [-1,1] normalization
 
 # Assuming you want to split into 80% train and 20% test
 num_train = int(0.8 * len(full_dataset))
 train_data, train_labels = full_dataset[:num_train], full_labels[:num_train]
 test_data, test_labels = full_dataset[num_train:], full_labels[num_train:]
 
+# from random import random
+# import cv2
+# # # Loop through the train_data and apply the transformation to each sample
+# for i in range(len(train_data)):
+#     if random()<0.01:
+#         img = (((train_data[i] / 2) + 0.5) * 255).astype(np.uint8)
+#         cv2.imwrite(f'/home/yoni/Desktop/f/temp/{i}.jpg', img)
+
 # Convert to PyTorch tensors
-train_data = torch.from_numpy(train_data).unsqueeze(1).float()
+train_data = torch.from_numpy(train_data).unsqueeze(1)
 train_labels = torch.from_numpy(train_labels).long()
-test_data = torch.from_numpy(test_data).unsqueeze(1).float()
+test_data = torch.from_numpy(test_data).unsqueeze(1)
 test_labels = torch.from_numpy(test_labels).long()
-
-transform = transforms.Compose([
-    transforms.ToPILImage(),  # Convert numpy array to PIL Image
-    transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
-    transforms.Normalize((0.5,), (0.5,))  # Normalize the tensor
-])
-
-# Loop through the train_data and apply the transformation to each sample
-for i in range(len(train_data)):
-    train_data[i] = transform(train_data[i])
-
-for i in range(len(test_data)):
-    test_data[i] = transform(test_data[i])
 
 # Create PyTorch DataLoaders for train and test sets
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_data, train_labels), batch_size=c.BATCH_SIZE, shuffle=True)

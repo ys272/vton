@@ -1,3 +1,4 @@
+import argparse
 from torch.utils.tensorboard import SummaryWriter # TensorBoard support
 from torch.nn import init
 from torchvision.utils import save_image
@@ -10,113 +11,125 @@ from datasets import train_loader
 import time
 from datetime import datetime
 import torchvision
-
-current_timestamp = time.time()
-current_date = datetime.fromtimestamp(current_timestamp).strftime("%d-%m-%y")
-tb = SummaryWriter(log_dir=f'/home/yoni/Desktop/f/model_output/tboard/{current_date + "-" + str(current_timestamp).split(".")[0]}')
-
-results_folder = Path("/home/yoni/Desktop/f/model_output/images/")
-results_folder.mkdir(exist_ok = True)
-save_and_sample_every = 1000
-image_size = 28
-num_channels = 1
-num_dims_first_layer = 16
-
-model = Unet(
-    dim=16,
-    channels=num_channels,
-    dim_mults=(1, 2, 4,)
-)
-model.to(c.DEVICE)
-optimizer = Adam(model.parameters(), lr=1e-3, eps=1e-5) # epsilon increased a la fast.ai optimization
-
-# x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE)
-# t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
-# output = model(x,t)
-# print(output.size())
-# make_dot(model(x,t), params=dict(model.named_parameters())).render("/home/yoni/Desktop/fash_model", format="png")
+import copy
 
 
-images, labels = next(iter(train_loader))
-images = images.to(c.DEVICE)
-grid = torchvision.utils.make_grid(images)
-tb.add_image('images', grid)
-t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
-input_tuple = (images, t)
-tb.add_graph(model, input_tuple)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='training experiment description')
+    parser.add_argument('-d', '--desc', type=str, help='training experiment description')
+    args = parser.parse_args()
+    description = ''
+    if args.desc is not None:
+        description = '_' + args.desc
+        description = description.replace(' ', '_')
+
+    current_timestamp = time.time()
+    current_date = datetime.fromtimestamp(current_timestamp).strftime('%d-%B-%H:%M') # e.g '20-July-17:38'
+    human_readable_timestamp = current_date + '-' + str(current_timestamp).split('.')[0] + description
+    tb = SummaryWriter(log_dir=os.path.join(c.MODEL_OUTPUT_TBOARD_DIR, human_readable_timestamp))
+
+    save_and_sample_every = 1000
+    image_size = 28
+    num_channels = 1
+    num_dims_first_layer = 16
+
+    model = Unet(
+        dim=16,
+        channels=num_channels,
+        dim_mults=(1, 2, 4,)
+    )
+
+    model.to(c.DEVICE)
+
+    # initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
+    # final_learning_rate = 1e-4
+    # learning_rates = np.linspace(1e-8, 1e-4, num=10000)
+    initial_learning_rate = 1e-3
+    optimizer = Adam(model.parameters(), lr=initial_learning_rate, eps=1e-5)
+
+    # x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE)
+    # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
+    # output = model(x,t)
+    # print(output.size())
+    # make_dot(model(x,t), params=dict(model.named_parameters())).render("/home/yoni/Desktop/fash_model", format="png")
+
+    images, labels = next(iter(train_loader))
+    images = images.to(c.DEVICE)
+    grid = torchvision.utils.make_grid(images)
+    tb.add_image('images', grid)
+    t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+    input_tuple = (images.to(torch.float32), t)
+    tb.add_graph(model, input_tuple)
 
 
-def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
-    if noise is None:
-        noise = torch.randn_like(x_start)
+    epochs = 1000
+    batch_num = 0
+    scaler = torch.cuda.amp.GradScaler()
+    ema_batch_num_start = 50000
+    ema = EMA(0.995, ema_batch_num_start)
+    ema_model = copy.deepcopy(model).eval().requires_grad_(False)
+    trainer_helper = TrainerHelper(human_readable_timestamp)
 
-    x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
-    predicted_noise = denoise_model(x_noisy, t)
+    with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
+        for epoch in range(epochs):
+            for step, batch in enumerate(train_loader):
+                # Code for finding maximum learning rate.
+                # if mini_batch_counter%100==0 and mini_batch_counter != 0 and initial_learning_rate < 0.01:
+                #     initial_learning_rate *= math.sqrt(10) 
+                #     for g in optimizer.param_groups:
+                #         g['lr'] = initial_learning_rate
+                #     print(f'mini_batch_counter {mini_batch_counter} lr: {initial_learning_rate}')
+                
+                # Code for applying 1cycle policy.
+                # if mini_batch_counter < 10000:
+                #     for g in optimizer.param_groups:
+                #         g['lr'] = learning_rates[mini_batch_counter]
+                        
+                optimizer.zero_grad()
+                batch_num += 1
+                batch = batch[0].to(c.DEVICE)
+                # Sample t uniformally for every example in the batch
+                t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+                
+                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    loss = p_losses(model, batch, t, loss_type="huber")
 
-    if loss_type == 'l1':
-        loss = F.l1_loss(noise, predicted_noise)
-    elif loss_type == 'l2':
-        loss = F.mse_loss(noise, predicted_noise)
-    elif loss_type == "huber":
-        loss = F.smooth_l1_loss(noise, predicted_noise)
-    else:
-        raise NotImplementedError()
+                if batch_num % 100 == 0:
+                    print(f'Loss for epoch {epoch}, batch {batch_num}:', loss.item())
 
-    return loss
+                scaler.scale(loss).backward() # loss.backward()
+                scaler.step(optimizer) # optimizer.step()
+                scaler.update()
+                ema.step_ema(ema_model, model)
+                
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model, optimizer, batch_num)
+                if num_batches_since_min_loss > 10000:
+                    if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
+                        for g in optimizer.param_groups:
+                            g['lr'] /= math.sqrt(10) # divide learning rate by sqrt(10)
+                        trainer_helper.update_last_learning_rate_reduction(batch_num)
+                        lr_reduction_msg = f'LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
+                        print(lr_reduction_msg)
+                        log_file.write(lr_reduction_msg)
+                elif num_batches_since_min_loss == 0:
+                    loss_decrease_msg = f'LOSS DECREASE & MODEL SAVED, at batch num: {batch_num}\n'
+                    print(loss_decrease_msg)
+                    log_file.write(loss_decrease_msg)
 
-
-epochs = 60
-for epoch in range(epochs):
-    for step, batch in enumerate(train_loader):
-        if step>3:
-            break
-        
-        optimizer.zero_grad()
-
-        batch = batch[0].to(c.DEVICE)
-
-        # Algorithm 1 line 3: sample t uniformally for every example in the batch
-        t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
-
-        # Everything that isn't an identity (residual) convolution should be zeroed in upsampling and downsampling processing path.
-        # Downsampling convolutions should be initialized orthogonally.
-        # Final layer should also be zerod out.
-        for d in model.downs:
-            # first two components are resnet blocks
-            # for resnet_block in d[:2]: 
-            #     resnet_block.block1.proj.weight.data.zero_()
-            #     resnet_block.block2.proj.weight.data.zero_()
-            # # third component is attention
-            # attention = d[2]
-            # attention.fn.fn.to_qkv.weight.data.zero_()
-            # attention.fn.fn.to_out[0].weight.data.zero_()
-            # # fourth component is downsampling, which includes residual identity 
-            downsample = d[3]
-            if not isinstance(downsample,torch.nn.modules.conv.Conv2d):
-                init.orthogonal_(downsample[1].weight)
-                      
-        model.final_conv.weight.data.zero_()
-        
-        loss = p_losses(model, batch, t, loss_type="huber")
-
-        if step % 100 == 0:
-            print(f'Loss for epoch {epoch}, step {step}:', loss.item())
-
-        loss.backward()
-        optimizer.step()
-
-        # save generated images
-        if step != 0 and step % save_and_sample_every == 0:
-            img_sequences = p_sample_loop(model, shape=(4, num_channels, image_size, image_size))
-            for i,img in enumerate(img_sequences[-1]):
-                img = (img + 1) * 0.5
-                save_image(torch.from_numpy(img), str(results_folder / f'sample-{epoch}_{step}_final.png'), nrow = 4//2)
-    
-    tb.add_scalar('Train loss', loss, epoch)
-    # tb.add_scalar('Val loss', val_loss, epoch)
-    for name, param in model.named_parameters():
-      tb.add_histogram(name, param, epoch)
-      tb.add_histogram(f'{name}.grad', param.grad, epoch)
-    
-    
-tb.close()
+                # Save generated images.
+                if batch_num != 0 and batch_num % save_and_sample_every == 0:
+                    for m,suffix in [(model, ''), (ema_model, '_ema')]:
+                        img_sequences = p_sample_loop(m, shape=(4, num_channels, image_size, image_size))
+                        for i,img in enumerate(img_sequences[-1]):
+                            if suffix == '_ema' and batch_num < ema_batch_num_start:
+                                continue
+                            img = img + 0.5 # [-0.5,0.5] normalization # img =  (img + 1) * 0.5 # [-1,1] normalization
+                            save_image(torch.from_numpy(img), os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}.png'), nrow = 4//2)
+                
+                tb.add_scalar('train loss', loss, batch_num)
+                
+            for name, param in model.named_parameters():
+                tb.add_histogram(name, param, epoch)
+                tb.add_histogram(f'{name}.grad', param.grad, epoch)
+            
+    tb.close()

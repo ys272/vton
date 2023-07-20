@@ -22,6 +22,15 @@ for dir in DATA_SOURCES:
         else:
             os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir), exist_ok=True)
             
+MODEL_OUTPUT_DIR = os.path.join(ROOT_DIR, 'model_output')
+MODEL_OUTPUT_PARAMS_DIR = os.path.join(MODEL_OUTPUT_DIR, 'network_params')
+MODEL_OUTPUT_TBOARD_DIR = os.path.join(MODEL_OUTPUT_DIR, 'tboard')
+MODEL_OUTPUT_IMAGES_DIR = os.path.join(MODEL_OUTPUT_DIR, 'images')
+MODEL_OUTPUT_LOG_DIR = os.path.join(MODEL_OUTPUT_DIR, 'logs')
+dirs = [MODEL_OUTPUT_DIR, MODEL_OUTPUT_PARAMS_DIR, MODEL_OUTPUT_TBOARD_DIR, MODEL_OUTPUT_IMAGES_DIR, MODEL_OUTPUT_LOG_DIR]
+for dir in dirs:
+    os.makedirs(dir, exist_ok=True)
+
 
 '''
 pose model
@@ -66,7 +75,7 @@ VTON_RESOLUTION = {'s':(128,88), 'm':(256,176), 'l':(1024,704)}
 '''
 diffusion params
 '''
-NUM_TIMESTEPS = 1000
+NUM_TIMESTEPS = 256
 
 MIN_NORMALIZED_VALUE = -1
 MAX_NORMALIZED_VALUE = 1
@@ -79,4 +88,4 @@ General
 '''
 
 DEVICE = 'cuda'
-BATCH_SIZE = 32
+BATCH_SIZE = 64

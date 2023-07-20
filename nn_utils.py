@@ -1,3 +1,4 @@
+import os
 import math
 import torch
 from torch import nn
@@ -9,6 +10,7 @@ from einops.layers.torch import Rearrange
 from functools import partial
 from torch import nn, einsum
 import torch.nn.functional as F
+from diffusion_utils import q_sample
 
 
 '''
@@ -35,7 +37,6 @@ class SinusoidalPositionEmbeddings(nn.Module):
         max_period =c.NUM_TIMESTEPS
         embeddings = math.log(max_period) / (half_dim -1)
         embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
-        # embeddings = torch.exp(torch.arange(half_dim) * -embeddings)
         embeddings = time[:, None] * embeddings[None, :]
         embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         return embeddings
@@ -217,7 +218,6 @@ A wrapper class for performing *layer* normalization.
 TODO: Note that there's been a debate about whether to apply normalization
 before or after attention in Transformers.
 '''
-
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
@@ -232,3 +232,81 @@ class PreNorm(nn.Module):
     def forward(self, x):
         x = self.norm(x)
         return self.fn(x)
+
+
+class EMA:
+    def __init__(self, beta, batch_num_when_ema_should_start):
+        super().__init__()
+        self.beta = beta
+        self.batch_num = 0
+        self.was_i_initialized = False
+        self.batch_num_when_ema_should_start = batch_num_when_ema_should_start
+
+    def update_model_average(self, ma_model, current_model):
+        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
+            old_weight, up_weight = ma_params.data, current_params.data
+            ma_params.data = self.update_average(old_weight, up_weight)
+
+    def update_average(self, old, new):
+        if old is None:
+            return new
+        return old * self.beta + (1 - self.beta) * new
+
+    def step_ema(self, ema_model, model):
+        if self.batch_num >= self.batch_num_when_ema_should_start:
+            if not self.was_i_initialized:
+                self.reset_parameters(ema_model, model)
+                self.was_i_initialized = True
+            else:
+                self.update_model_average(ema_model, model)
+        self.batch_num += 1
+
+    def reset_parameters(self, ema_model, model):
+        ema_model.load_state_dict(model.state_dict())
+        
+        
+class TrainerHelper:
+    def __init__(self, human_readable_timestamp):
+        self.min_loss = float('inf')
+        self.min_loss_batch_num = 0
+        self.human_readable_timestamp = human_readable_timestamp
+        self.last_learning_rate_reduction = 0
+    
+    def update_loss_possibly_save_model(self, loss, model, optimizer, batch_num):
+        if loss < self.min_loss:
+            self.min_loss = loss
+            self.min_loss_batch_num = batch_num
+            save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
+            torch.save({
+                'batch_num': batch_num,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+            }, save_path)
+        
+        return batch_num - self.min_loss_batch_num
+    
+    def update_last_learning_rate_reduction(self, batch_num):
+        self.last_learning_rate_reduction = batch_num        
+        
+    def num_batches_since_last_learning_rate_reduction(self, batch_num):
+        return batch_num - self.last_learning_rate_reduction
+    
+
+def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
+    if noise is None:
+        noise = torch.randn_like(x_start)
+
+    x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
+    predicted_noise = denoise_model(x_noisy, t)
+
+    if loss_type == 'l1':
+        loss = F.l1_loss(noise, predicted_noise)
+    elif loss_type == 'l2':
+        loss = F.mse_loss(noise, predicted_noise)
+    elif loss_type == "huber":
+        loss = F.smooth_l1_loss(noise, predicted_noise)
+    else:
+        raise NotImplementedError()
+
+    return loss

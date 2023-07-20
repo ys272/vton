@@ -146,4 +146,5 @@ class Unet(nn.Module):
 # model.to(c.DEVICE)
 # output = model(x,t)
 # print(output.size())
-# make_dot(model(x,t), params=dict(model.named_parameters())).render("/home/yoni/Desktop/fash_model", format="png")
+# params = dict(model.named_parameters())
+# make_dot(model(x,t), params=params).render("/home/yoni/Desktop/fash_model", format="png")

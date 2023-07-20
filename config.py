@@ -1,5 +1,6 @@
 import os
 
+
 ROOT_DIR = '/home/yoni/Desktop/f'
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
 ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
@@ -77,8 +78,8 @@ diffusion params
 '''
 NUM_TIMESTEPS = 256
 
-MIN_NORMALIZED_VALUE = -1
-MAX_NORMALIZED_VALUE = 1
+MIN_NORMALIZED_VALUE = -0.5
+MAX_NORMALIZED_VALUE = 0.5
 
 REVERSE_DIFFUSION_SAMPLER = 'ddpm'
 

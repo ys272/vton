@@ -28,7 +28,8 @@ full_labels = loaded_data['labels']
 # normalize from [0,255] to [-0.5, 0.5]
 full_dataset /= 255
 full_dataset -= 0.5
-# full_dataset *= 2 # [-1,1] normalization
+if c.MIN_NORMALIZED_VALUE == -1:
+  full_dataset *= 2 # [-1,1] normalization
 
 # Assuming you want to split into 80% train and 20% test
 num_train = int(0.8 * len(full_dataset))

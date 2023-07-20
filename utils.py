@@ -1,7 +1,13 @@
+import sys
+from torchvision.utils import save_image
+import torch
+import os
 import cv2
 import numpy as np
 from typing import Tuple, List
 from random import uniform
+from diffusion_utils import p_sample_loop
+import config as c
 
 
 def resize_img(target_width:int, target_height:int, input_img_path:str = None, img=None, get_mapping_from_new_to_old_img=False) -> np.ndarray:
@@ -57,4 +63,15 @@ def count_lines(filename):
     with open(filename, 'r') as file:
         lines = file.readlines()
         return len(lines)
-    
+
+
+def call_sampler_simple(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True):
+    img_sequences = p_sample_loop(model, shape, sampler, clip_model_output)
+    for i,img in enumerate(img_sequences[-1]):
+        if c.MIN_NORMALIZED_VALUE == -0.5:
+            img = img + 0.5
+        elif c.MIN_NORMALIZED_VALUE == -1:
+            img =  (img + 1) * 0.5
+        else:
+            sys.exit('unsupported normalization')
+        save_image(torch.from_numpy(img), os.path.join('/home/yoni/Desktop/f/other/deleteme/', f'{i}.png'), nrow = 4//2)

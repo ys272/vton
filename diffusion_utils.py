@@ -82,14 +82,13 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     sqrt_recip_alphas_t = extract(sqrt_recip_alphas, t, x_t.shape)
     
     model_output = model(x_t, t)
-    if clip_model_output:
-        model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
 
     if t_index == 0:
         # model_mean = sqrt_recip_alphas_t * (
         #     x - betas_t * model_output / sqrt_one_minus_alphas_cumprod_t
         # )
-        
+        if clip_model_output:
+            model_output = model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
         # TODO!!!
         # Check whether this is better than the above (original). Here, we set 
         # sqrt_recip_alphas_t to 1.
@@ -106,13 +105,15 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     
 
 @torch.no_grad()
-def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=True):
+def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1):
   '''
-  Predict x_t1 (x at timestep t-1) deterministically (DDIM style, with eta = 0).
+  Predict x_t1 (x at timestep t-1) using DDIM.
+  If eta=0, it's deterministic.
+  If eta=1, it's DDPM.
+  Values in between 0 and 1 are an interpolation between DDIM and DDPM.
   '''
   model_output = model(x_t, t)
-  if clip_model_output:
-    model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
+  
   alphas_cumprod_t = extract(
         alphas_cumprod, t, x_t.shape
   )
@@ -122,32 +123,47 @@ def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=
   betas_cumprod_t = 1 - alphas_cumprod_t
   betas_cumprod_prev_t = 1 - alphas_cumprod_prev_t
   
-  if t_index == 1:
+  if t_index == 0:
     # set alphas_cumprod_prev to 1, and betas_cumprod_prev_t to 0.
-    alphas_cumprod_prev /= alphas_cumprod_prev 
+    alphas_cumprod_prev_t /= alphas_cumprod_prev_t
     betas_cumprod_prev_t -= betas_cumprod_prev_t
-      
+    if clip_model_output:
+        model_output = model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
+    
+  sigma = eta * ((betas_cumprod_prev_t / betas_cumprod_t) * (1 - (alphas_cumprod_t / alphas_cumprod_prev_t))).sqrt()
+  noise = torch.randn_like(x_t)
+  
   x_0_hat = (x_t - betas_cumprod_t.sqrt() * model_output) / alphas_cumprod_t.sqrt()
-  x_t1 = alphas_cumprod_prev_t.sqrt() * x_0_hat + betas_cumprod_prev_t.sqrt() * model_output
+  x_t1 = alphas_cumprod_prev_t.sqrt() * x_0_hat + (betas_cumprod_prev_t - sigma**2).sqrt() * model_output + sigma * noise
   
   return x_t1
 
-    
-if c.REVERSE_DIFFUSION_SAMPLER == 'ddpm':
-    reverse_sampler_func = p_sample_ddpm
-elif c.REVERSE_DIFFUSION_SAMPLER == 'ddim':
-    reverse_sampler_func = p_sample_ddim    
 
-# Algorithm 2 (including returning all images)
 @torch.no_grad()
-def p_sample_loop(model, shape):
+def ddim_step(model, x_t, t, abar_t, abar_t1, bbar_t, bbar_t1, eta):
+    noise = model(x_t, t)
+    noise.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
+    vari = ((bbar_t1/bbar_t) * (1-abar_t/abar_t1))
+    sig = vari.sqrt()*eta
+    x_0_hat = ((x_t-bbar_t.sqrt()*noise) / abar_t.sqrt())
+    x_t = abar_t1.sqrt()*x_0_hat + (bbar_t1-sig**2).sqrt()*noise
+    if t>0: x_t += sig * torch.randn(x_t.shape).to(x_t)
+    return x_t
+
+
+@torch.no_grad()
+def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True):
+    if sampler == 'ddpm':
+        reverse_sampler_func = p_sample_ddpm
+    elif sampler == 'ddim':
+        reverse_sampler_func = p_sample_ddim
     device = next(model.parameters()).device
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
     img = torch.randn(shape, device=device)
     imgs = []
     for timestep in tqdm(reversed(range(0, c.NUM_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_TIMESTEPS):
-        img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=device, dtype=torch.long), timestep)
+        img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=device, dtype=torch.long), timestep, clip_model_output=clip_model_output)
         imgs.append(img.cpu().numpy())
     return imgs
 

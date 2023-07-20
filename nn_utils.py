@@ -282,6 +282,7 @@ class TrainerHelper:
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': loss,
+                'learning_rate': optimizer.param_groups[0]['lr'],
             }, save_path)
         
         return batch_num - self.min_loss_batch_num

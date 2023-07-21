@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-07-23-1689863578.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-July-21:49.pth'))
         model.load_state_dict(model_state['model_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         batch_num = model_state['batch_num']

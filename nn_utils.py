@@ -58,15 +58,16 @@ class Residual(nn.Module):
 
 def Upsample(dim, dim_out=None):
     return nn.Sequential(
-        nn.Upsample(scale_factor=2, mode="nearest"),
+        nn.Upsample(scale_factor=2, mode='nearest'),
         nn.Conv2d(dim, default(dim_out, dim), 3, padding=1),
     )
 
 
 def Downsample(dim, dim_out=None):
-    # No More Strided Convolutions or Pooling
+    # max pooling could be achieved as follows:
+    # reduce(x, 'b c (h h1) (w w1) -> b c h w', reduction='max', h1=2, w1=2)
     return nn.Sequential(
-        Rearrange("b c (h p1) (w p2) -> b (c p1 p2) h w", p1=2, p2=2),
+        Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1=2, p2=2),
         nn.Conv2d(dim * 4, default(dim_out, dim), 1),
     )
     
@@ -79,7 +80,12 @@ class WeightStandardizedConv2d(nn.Conv2d):
 
     def forward(self, x):
         eps = 1e-5 if x.dtype == torch.float32 else 1e-3
-
+        '''
+        TODO: At inference time the mean and var are fixed, so this shouldn't have to be computed every time.
+        Need to investigate this more, but perhaps this be achieved using buffers that store the mean and var. 
+        During training those will be updated at each iteration, and during inference they will be read from, 
+        without performing any calculations.
+        '''
         weight = self.weight
         mean = reduce(weight, "o ... -> o 1 1 1", "mean")
         var = reduce(weight, "o ... -> o 1 1 1", partial(torch.var, unbiased=False))
@@ -97,7 +103,7 @@ class WeightStandardizedConv2d(nn.Conv2d):
 
 
 class Block(nn.Module):
-    def __init__(self, dim, dim_out, groups=8):
+    def __init__(self, dim, dim_out, groups=4):
         super().__init__()
         self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
         self.norm = nn.GroupNorm(groups, dim_out)
@@ -109,6 +115,7 @@ class Block(nn.Module):
 
         if scale_shift is not None:
             scale, shift = scale_shift
+            # TODO: Experiment if removing the +1 makes a meaningful difference.
             x = x * (scale + 1) + shift
 
         x = self.act(x)
@@ -125,7 +132,7 @@ group normalization (see (Kolesnikov et al., 2019) for details).
 
 
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=8):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=4):
         super().__init__()
         self.mlp = (
             nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2))
@@ -144,6 +151,7 @@ class ResnetBlock(nn.Module):
             time_emb = rearrange(time_emb, "b c -> b c 1 1")
             scale_shift = time_emb.chunk(2, dim=1)
 
+        # TODO: Try applying the scale and shift to the second block as well.
         h = self.block1(x, scale_shift=scale_shift)
         h = self.block2(h)
         return h + self.res_conv(x)

@@ -136,7 +136,7 @@ class Unet(nn.Module):
 
 # image_size = 28
 # num_channels = 1
-# x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE)
+# x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
 # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
 # num_dims_first_layer = 16
 # model = Unet(num_dims_first_layer, channels=num_channels, dim_mults=(1, 2, 4))

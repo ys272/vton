@@ -1,8 +1,11 @@
+import os
+import cv2
 import torch
 import torch.nn.functional as F
 import config as c
 from tqdm import tqdm
 import numpy as np
+from functools import partial
 
 
 def cosine_beta_schedule(timesteps, s=0.008):
@@ -19,7 +22,7 @@ def cosine_beta_schedule(timesteps, s=0.008):
 
 def linear_beta_schedule(timesteps):
     beta_start = 0.0001
-    beta_end = 0.02
+    beta_end = 0.03
     return torch.linspace(beta_start, beta_end, timesteps)
 
 
@@ -31,8 +34,8 @@ Experiment with one of the following two options:
 2. Just using the linear beta schedule, by adjusting the beta_end value such that alpha_cumprod only reaches 0 in a "smooth" 
 fashion, at the final timestep, like the cosine schedule.
 '''
-betas = cosine_beta_schedule(c.NUM_TIMESTEPS)
-# betas = linear_beta_schedule(c.timesteps)
+# betas = cosine_beta_schedule(c.NUM_TIMESTEPS)
+betas = linear_beta_schedule(c.NUM_TIMESTEPS)
 
 # define alphas 
 alphas = 1. - betas
@@ -44,7 +47,7 @@ sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
 sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
 
 posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
-
+# print(alphas_cumprod[:6], '\n',alphas_cumprod[-6:])
 
 def extract(a, t, x_shape):
     '''
@@ -59,21 +62,22 @@ def extract(a, t, x_shape):
 # forward diffusion
 def q_sample(x_start, t, noise=None):
     if noise is None:
-        noise = torch.randn_like(x_start)
+        noise = torch.randn_like(x_start) * c.NOISE_SCALING_FACTOR
 
     sqrt_alphas_cumprod_t = extract(sqrt_alphas_cumprod, t, x_start.shape)
     sqrt_one_minus_alphas_cumprod_t = extract(
         sqrt_one_minus_alphas_cumprod, t, x_start.shape
     )
-
     return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
-
+    # return (sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise).clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
 
 
 @torch.no_grad()
 def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     '''
     Predict x_t1 (x at timestep t-1).
+    TODO: If using ddpm, note that it's unclear where/how to apply clamping/clipping, if requested.
+    For now, use ddim with eta=1, if you want to simulate ddpm.
     '''
     betas_t = extract(betas, t, x_t.shape)
     sqrt_one_minus_alphas_cumprod_t = extract(
@@ -82,26 +86,23 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     sqrt_recip_alphas_t = extract(sqrt_recip_alphas, t, x_t.shape)
     
     model_output = model(x_t, t)
-
     if t_index == 0:
         # model_mean = sqrt_recip_alphas_t * (
         #     x - betas_t * model_output / sqrt_one_minus_alphas_cumprod_t
         # )
-        if clip_model_output:
-            model_output = model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
         # TODO!!!
         # Check whether this is better than the above (original). Here, we set 
         # sqrt_recip_alphas_t to 1.
         model_mean = x_t - betas_t * model_output / sqrt_one_minus_alphas_cumprod_t
+        if clip_model_output:
+            model_mean = model_mean.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
         return model_mean
     else:
-        model_mean = sqrt_recip_alphas_t * (
-            x_t - betas_t * model_output / sqrt_one_minus_alphas_cumprod_t
-        )
+        model_mean =  x_t - betas_t * model_output / sqrt_one_minus_alphas_cumprod_t
         posterior_variance_t = extract(posterior_variance, t, x_t.shape)
-        noise = torch.randn_like(x_t)
-        # Algorithm 2 line 4:
-        return model_mean + torch.sqrt(posterior_variance_t) * noise
+        noise = torch.randn_like(x_t) * c.NOISE_SCALING_FACTOR
+
+        return sqrt_recip_alphas_t * model_mean + torch.sqrt(posterior_variance_t) * noise
     
 
 @torch.no_grad()
@@ -122,50 +123,44 @@ def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=
   )
   betas_cumprod_t = 1 - alphas_cumprod_t
   betas_cumprod_prev_t = 1 - alphas_cumprod_prev_t
-  
+
   if t_index == 0:
     # set alphas_cumprod_prev to 1, and betas_cumprod_prev_t to 0.
     alphas_cumprod_prev_t /= alphas_cumprod_prev_t
     betas_cumprod_prev_t -= betas_cumprod_prev_t
-    if clip_model_output:
-        model_output = model_output.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
     
   sigma = eta * ((betas_cumprod_prev_t / betas_cumprod_t) * (1 - (alphas_cumprod_t / alphas_cumprod_prev_t))).sqrt()
-  noise = torch.randn_like(x_t)
+  noise = torch.randn_like(x_t) * c.NOISE_SCALING_FACTOR
   
   x_0_hat = (x_t - betas_cumprod_t.sqrt() * model_output) / alphas_cumprod_t.sqrt()
+#   print(t_index, 'before', torch.min(x_0_hat).item(), torch.max(x_0_hat).item(), eta
+  if clip_model_output:
+    x_0_hat = x_0_hat.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
+#   print(t_index, 'after', torch.min(x_0_hat).item(), torch.max(x_0_hat).item(), eta)
   x_t1 = alphas_cumprod_prev_t.sqrt() * x_0_hat + (betas_cumprod_prev_t - sigma**2).sqrt() * model_output + sigma * noise
   
   return x_t1
 
 
 @torch.no_grad()
-def ddim_step(model, x_t, t, abar_t, abar_t1, bbar_t, bbar_t1, eta):
-    noise = model(x_t, t)
-    noise.clamp(c.MIN_NORMALIZED_VALUE, c.MAX_NORMALIZED_VALUE)
-    vari = ((bbar_t1/bbar_t) * (1-abar_t/abar_t1))
-    sig = vari.sqrt()*eta
-    x_0_hat = ((x_t-bbar_t.sqrt()*noise) / abar_t.sqrt())
-    x_t = abar_t1.sqrt()*x_0_hat + (bbar_t1-sig**2).sqrt()*noise
-    if t>0: x_t += sig * torch.randn(x_t.shape).to(x_t)
-    return x_t
-
-
-@torch.no_grad()
-def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True):
+def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None):
     if sampler == 'ddpm':
         reverse_sampler_func = p_sample_ddpm
     elif sampler == 'ddim':
-        reverse_sampler_func = p_sample_ddim
+        if eta is not None:
+            reverse_sampler_func = partial(p_sample_ddim, eta=eta)
+        else:
+            reverse_sampler_func = p_sample_ddim
     device = next(model.parameters()).device
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
-    img = torch.randn(shape, device=device)
+    img = torch.randn(shape, device=device) * c.NOISE_SCALING_FACTOR
     imgs = []
     for timestep in tqdm(reversed(range(0, c.NUM_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_TIMESTEPS):
         img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=device, dtype=torch.long), timestep, clip_model_output=clip_model_output)
         imgs.append(img.cpu().numpy())
     return imgs
+
 
 
 # import matplotlib.pyplot as plt

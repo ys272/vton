@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 import torchvision
 import copy
-from utils import call_sampler_simple
+from utils import call_sampler_simple, show_example_noise_sequence
 
 
 if __name__ == '__main__':
@@ -50,8 +50,8 @@ if __name__ == '__main__':
     batch_num = 0
 
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-July-21:49.pth'))
+    if False: # 23-July-09:49.pth was a good result
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-July-09:49.pth'))
         model.load_state_dict(model_state['model_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         batch_num = model_state['batch_num']
@@ -63,13 +63,14 @@ if __name__ == '__main__':
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
     
-    # x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE)
+    # x = torch.randn(c.BATCH_SIZE, num_channels, image_size, image_size, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
     # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE).long()
     # output = model(x,t)
     # print(output.size())
     # make_dot(model(x,t), params=dict(model.named_parameters())).render("/home/yoni/Desktop/fash_model", format="png")
     
-    # call_sampler_simple(model, (10, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True)
+    # call_sampler_simple(model, (10, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
+    # call_sampler_simple(model, (10, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
     
     images, labels = next(iter(train_loader))
     images = images.to(c.DEVICE)
@@ -104,6 +105,9 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 batch_num += 1
                 batch = batch[0].to(c.DEVICE)
+                
+                # show_example_noise_sequence(batch[:5].squeeze(1))
+                
                 # Sample t uniformally for every example in the batch
                 t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
                 

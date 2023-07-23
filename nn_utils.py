@@ -304,7 +304,7 @@ class TrainerHelper:
 
 def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
     if noise is None:
-        noise = torch.randn_like(x_start)
+        noise = torch.randn_like(x_start) * c.NOISE_SCALING_FACTOR
 
     x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
     predicted_noise = denoise_model(x_noisy, t)

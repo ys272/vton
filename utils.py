@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 from typing import Tuple, List
 from random import uniform
-from diffusion_utils import p_sample_loop, q_sample
 import config as c
 
 
@@ -74,25 +73,4 @@ def denormalize_img(img):
         sys.exit('unsupported normalization')
     return img
 
-def call_sampler_simple(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None):
-    img_sequences = p_sample_loop(model, shape, sampler, clip_model_output, eta)
-    if not show_all:
-        for t_idx,img in enumerate(img_sequences[-1]):
-            img = denormalize_img(img)
-            save_image(torch.from_numpy(img), os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{c.NUM_TIMESTEPS - t_idx - 1}.png'), nrow = 4//2)
-    else:
-        for img_idx in range(shape[0]):
-            for t_idx,imgs in enumerate(img_sequences):
-                img = denormalize_img(imgs[img_idx].squeeze(0))
-                save_image(torch.from_numpy(img), os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)
-        
-
-
-def show_example_noise_sequence(imgs):
-    for img_idx,img in enumerate(imgs):
-        for t_idx in range(c.NUM_TIMESTEPS):
-            t = torch.tensor([t_idx]).cuda()
-            noised_img = q_sample(img, t)
-            noised_img_save_path = os.path.join('/home/yoni/Desktop/f/other/debugging/noising_examples', f'{img_idx}_{t_idx}.png')
-            noised_img = (noised_img.cpu().numpy() + 0.5) * 255
-            cv2.imwrite(noised_img_save_path, noised_img)
+                    

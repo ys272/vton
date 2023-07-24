@@ -10,7 +10,8 @@ from einops.layers.torch import Rearrange
 from functools import partial
 from torch import nn, einsum
 import torch.nn.functional as F
-from diffusion_utils import q_sample
+from diffusion_ddim import q_sample
+from diffusion_karras import q_sample_karras, scalings_karras
 
 
 '''
@@ -306,9 +307,13 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
     if noise is None:
         noise = torch.randn_like(x_start) * c.NOISE_SCALING_FACTOR
 
-    x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
-    predicted_noise = denoise_model(x_noisy, t)
-
+    if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+        x_noisy, noise = q_sample_karras(x_start, t, noise=noise)
+        predicted_noise = denoise_model(x_noisy, t)
+    else:
+        x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
+        predicted_noise = denoise_model(x_noisy, t)
+    
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise)
     elif loss_type == 'l2':
@@ -316,6 +321,6 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
     elif loss_type == "huber":
         loss = F.smooth_l1_loss(noise, predicted_noise)
     else:
-        raise NotImplementedError()
+        raise NotImplementedError()    
 
     return loss

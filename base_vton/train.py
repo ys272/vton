@@ -7,13 +7,14 @@ from torch.optim import Adam
 from pathlib import Path
 from model import *
 from algo.nn_utils import *
-from algo.diffusion_utils import *
+from diffusion_ddim import *
 from datasets import train_loader
 import time
 from datetime import datetime
 import torchvision
 import copy
-from utils import call_sampler_simple, show_example_noise_sequence
+from utils import denormalize_img
+from diffusion_karras import *
 
 
 if __name__ == '__main__':
@@ -50,8 +51,8 @@ if __name__ == '__main__':
     batch_num = 0
 
     # Load model from checkpoint.
-    if False: # 23-July-09:49.pth was a good result
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-July-09:49.pth'))
+    if False:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '24-July_karras.pth'))
         model.load_state_dict(model_state['model_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         batch_num = model_state['batch_num']
@@ -70,7 +71,8 @@ if __name__ == '__main__':
     # make_dot(model(x,t), params=dict(model.named_parameters())).render("/home/yoni/Desktop/fash_model", format="png")
     
     # call_sampler_simple(model, (10, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
-    # call_sampler_simple(model, (10, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
+    # call_sampler_simple(model, (50, num_channels, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
+    # call_sampler_simple_karras(model, 50, sampler='euler_ancestral', steps=250, sigma_max=80.0, clip_model_output=True, show_all=False)
     
     images, labels = next(iter(train_loader))
     images = images.to(c.DEVICE)
@@ -105,14 +107,18 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 batch_num += 1
                 batch = batch[0].to(c.DEVICE)
-                
+
                 # show_example_noise_sequence(batch[:5].squeeze(1))
-                
+                # show_example_noise_sequence_karras(batch[:5].squeeze(1), 100)
                 # Sample t uniformally for every example in the batch
-                t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+                
+                if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                    t = (torch.randn([len(batch)])*1.2-1.2).exp().to(c.DEVICE)
+                else:
+                    t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
                 
                 with torch.autocast(device_type='cuda', dtype=torch.float16):
-                    loss = p_losses(model, batch, t, loss_type="huber")
+                    loss = p_losses(model, batch, t, loss_type="l1")
 
                 if batch_num % 100 == 0:
                     print(f'Loss for epoch {epoch}, batch {batch_num}:', loss.item())
@@ -141,17 +147,19 @@ if __name__ == '__main__':
                 # Save generated images.
                 if batch_num != 0 and batch_num % save_and_sample_every == 0:
                     for m,suffix in [(model, ''), (ema_model, '_ema')]:
-                        img_sequences = p_sample_loop(m, shape=(4, num_channels, image_size, image_size))
-                        for i,img in enumerate(img_sequences[-1]):
-                            if suffix == '_ema' and batch_num < ema_batch_num_start:
+                        if suffix == '_ema' and batch_num < ema_batch_num_start:
                                 continue
-                            if c.MIN_NORMALIZED_VALUE == -0.5:
-                                img = img + 0.5 # [-0.5,0.5] normalization 
-                            elif c.MIN_NORMALIZED_VALUE == -1:
-                                img =  (img + 1) * 0.5 # [-1,1] normalization
-                            else:
-                                sys.exit('unsupported normalization')
-                            save_image(torch.from_numpy(img), os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}.png'), nrow = 4//2)
+                        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                            img_sequences = p_sample_loop_karras(sample_euler_karras, model, steps=250)
+                        else:
+                            img_sequences = p_sample_loop(m, shape=(4, num_channels, image_size, image_size))
+                        for i,img in enumerate(img_sequences[-1]):
+                            if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                                img = img.clamp(-1,1)
+                            img = denormalize_img(img)
+                            if c.REVERSE_DIFFUSION_SAMPLER != 'karras':
+                                img = torch.from_numpy(img)
+                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}.png'), nrow = 4//2)
                 
                 tb.add_scalar('train loss', loss, batch_num)
                 

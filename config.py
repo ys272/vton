@@ -71,7 +71,7 @@ schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
 # {0: 'Background', 1: 'Hat', 2: 'Hair', 3: 'Glove', 4: 'Sunglasses', 5: 'Upper-clothes', 6: 'Dress',
 # 7: 'Coat', 8: 'Socks', 9: 'Pants', 10: 'Jumpsuits', 11: 'Scarf', 12: 'Skirt', 13: 'Face', 14: 'Left-arm',
 # 15: 'Right-arm', 16: 'Left-leg', 17: 'Right-leg', 18: 'Left-shoe', 19: 'Right-shoe'}
-VTON_RESOLUTION = {'s':(128,88), 'm':(256,176), 'l':(1024,704)}
+VTON_RESOLUTION = {'t':(64,44), 's':(128,88), 'm':(256,176), 'l':(1024,704)}
 
 '''
 diffusion params

@@ -166,6 +166,7 @@ def create_final_dataset_vton_s_to_s():
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
   prob_aug = {'misc_online': 1, 'multi_pose': 0.1, 'paired_high_res':0, 'same_person_two_poses':0.15}
+  # prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0, 'same_person_two_poses':1}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:
@@ -182,6 +183,7 @@ def create_final_dataset_vton_s_to_s():
         clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.npy')
         person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person_with_masked_clothing.npy')
         pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
+        # TODO: Normalize to [-1,1] here.
         np.save(person_original_filepath_final, person_original_img)
         np.save(clothing_filepath_final, clothing_img)
         np.save(person_with_masked_clothing_filepath_final, person_with_masked_clothing_img)

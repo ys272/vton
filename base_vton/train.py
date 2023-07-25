@@ -8,7 +8,7 @@ from pathlib import Path
 from model import *
 from algo.nn_utils import *
 from diffusion_ddim import *
-from datasets import train_loader
+from datasets_fmnist import train_loader
 import time
 from datetime import datetime
 import torchvision

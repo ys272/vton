@@ -15,10 +15,10 @@ for dir in dirs:
 for dir in DATA_SOURCES:
     for sub_dir in PREPROCESSED_DATA_VTON_SUB_DIRS:
         if sub_dir in sml_dirs:
-            for size in ['s', 'm', 'l']:
+            for size in ['t', 's', 'm', 'l']:
                 os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir, size), exist_ok=True)
         elif sub_dir in sm_dirs:
-            for size in ['s', 'm']:
+            for size in ['t', 's', 'm']:
                 os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir, size), exist_ok=True)
         else:
             os.makedirs(os.path.join(PREPROCESSED_DATA_VTON_DIR, dir, sub_dir), exist_ok=True)

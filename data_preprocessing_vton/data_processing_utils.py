@@ -30,9 +30,9 @@ def improve_contrast_if_very_light(clothing_img, person_original_img):
     is_very_light_clothing = np.mean(clothing_img[clothing_img.shape[0]//2-10:clothing_img.shape[0]//2+10, clothing_img.shape[1]//2-10:clothing_img.shape[1]//2+10]) > 200
     if is_very_light_clothing:
         # Random contrast adjustment
-        beta = -5#uniform(-10,-20)
+        beta = -5 #uniform(-10,-20)
         # Random contrast multiplier
-        alpha = 1#uniform(0.75, 1.1)
+        alpha = 1 #uniform(0.75, 1.1)
         
         clothing_img = cv2.convertScaleAbs(clothing_img, alpha=alpha, beta=beta)
         person_original_img = cv2.convertScaleAbs(person_original_img, alpha=alpha, beta=beta)
@@ -49,56 +49,63 @@ def improve_contrast_process(clothing_dir, person_original_dir):
         cv2.imwrite(clothing_img_path, clothing_img)
         cv2.imwrite(person_original_img_path, person_original_img)
         
-        
-new_height = VTON_RESOLUTION['s'][0]
-new_width = VTON_RESOLUTION['s'][1]
+size = 't'
+new_height = VTON_RESOLUTION[size][0]
+new_width = VTON_RESOLUTION[size][1]
+downsample_factor_per_size = {'s':2, 't':4}
+downsample_factor = downsample_factor_per_size[size]
+
 def downsample_mask_arr(arr):
   '''
-  Downsample a mask array such that each dimension is half the size of the original.
-  The value of each pixel in the downsampled array (which corresponds to a 2x2 grid in the original array)
-  should be 1 if there are two or more 1s in the original array. Otherwise it should be 0.
+  Downsample a mask array such that each dimension is half/quarter the size of the original.
+  The value of each pixel in the downsampled array (which corresponds to a 2x2 or 4x4 grid in the original array)
+  should be 1 if half or more (i.e 2 or 8) of the corresponding original grid are 1s. Otherwise it should be 0.
   '''
-  # Reshape the original array to divide it into non-overlapping 2x2 blocks
-  reshaped_arr = arr[:new_height*2, :new_width*2].reshape(new_height, 2, new_width, 2)
-  # Sum along the last two axes to count the number of ones in each 2x2 grid
+  # Reshape the original array to divide it into non-overlapping downsample_factor x downsample_factor blocks
+  reshaped_arr = arr[:new_height*downsample_factor, :new_width*downsample_factor].reshape(new_height, downsample_factor, new_width, downsample_factor)
+  # Sum along the last two axes to count the number of ones in each downsample_factor x downsample_factor grid
   grid_sum = np.sum(reshaped_arr, axis=(1, 3))
   # Create the downsampled array based on the downsampling logic
-  downsampled_arr = grid_sum >= 2
+  if downsample_factor == 2:
+    downsampled_arr = grid_sum >= 2
+  else:
+    downsampled_arr = grid_sum >= 8
   return downsampled_arr
 
 
-def create_downsampled_s_data_from_m(dirs):
-  # Create the "small" dataset by downsampling the "medium" sized data.
+def create_downsampled_data_from_m(dirs, size='s'):
+  
+  # Create the smaller dataset by downsampling the "medium" sized data.
   for directory in dirs:
     directory_m = os.path.join(directory, 'm')
-    directory_s = os.path.join(directory, 's')
+    directory_target = os.path.join(directory, size)
     filenames = os.listdir(directory_m)
     file_type = filenames[0].split('.')[-1]
     for filename in tqdm(filenames):
       if file_type == 'jpg':
         file_m = cv2.imread(os.path.join(directory_m, filename))
-        file_s = cv2.resize(file_m, (new_width, new_height), interpolation=cv2.INTER_AREA)
-        cv2.imwrite(os.path.join(directory_s, filename), file_s)
+        file_target = cv2.resize(file_m, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        cv2.imwrite(os.path.join(directory_target, filename), file_target)
       elif file_type == 'npy': # boolean masks
         file_m = np.load(os.path.join(directory_m, filename))
-        file_s = downsample_mask_arr(file_m)
-        np.save(os.path.join(directory_s, filename), file_s)
+        file_target = downsample_mask_arr(file_m)
+        np.save(os.path.join(directory_target, filename), file_target)
       elif file_type == 'txt':
         with open(os.path.join(directory_m, filename), 'r') as f:
           file_m = eval(f.readlines()[0])
-          file_s = []
+          file_target = []
           for coord in file_m:
             if coord is None:
-              file_s.append(None)
+              file_target.append(None)
             else:
-              downsampled_coord = (round(coord[0]/2), round(coord[1]/2))
-              file_s.append(downsampled_coord)
-          assert len(file_s)==17
-        with open(os.path.join(directory_s, filename), 'w') as f:
-          f.write(str(file_s))
+              downsampled_coord = (round(coord[0]/downsample_factor), round(coord[1]/downsample_factor))
+              file_target.append(downsampled_coord)
+          assert len(file_target)==17
+        with open(os.path.join(directory_target, filename), 'w') as f:
+          f.write(str(file_target))
 
 
-def create_downsampled_s_data_from_m_all():
+def create_downsampled_data_from_m_all(size='s'):
   base_dir =  '/home/yoni/Desktop/f/data/processed_data_vton'
   data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses']
   sub_dirs = ['clothing', 'mask_coordinates', 'person_original', 'person_with_masked_clothing', 'pose_keypoints']
@@ -108,10 +115,10 @@ def create_downsampled_s_data_from_m_all():
     for sub_dir in sub_dirs:
       data_source_sub_dirs_paths.append(os.path.join(data_source_path, sub_dir))
 
-    create_downsampled_s_data_from_m(data_source_sub_dirs_paths)
+    create_downsampled_data_from_m(data_source_sub_dirs_paths, size)
     print(f'finished handling data source: {data_source}')
 
-# create_downsampled_s_data_from_m_all()
+# create_downsampled_data_from_m_all(size=size)
   
   
 def create_augmented_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, mask_coordinates_arr:np.ndarray, pose_keypoints_list:List) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -123,7 +130,7 @@ def create_augmented_training_sample(person_original_img:np.ndarray, clothing_im
   person_with_masked_clothing_img = cv2.flip(person_with_masked_clothing_img, 1)
   mask_coordinates_arr = cv2.flip(mask_coordinates_arr, 1)
 
-  light_clothing = np.mean(clothing_img[VTON_RESOLUTION['s'][0]//2-10:VTON_RESOLUTION['s'][0]//2+10, VTON_RESOLUTION['s'][1]//2-10:VTON_RESOLUTION['s'][1]//2+10]) > 200
+  light_clothing = np.mean(clothing_img[VTON_RESOLUTION[size][0]//2-10:VTON_RESOLUTION[size][0]//2+10, VTON_RESOLUTION[size][1]//2-10:VTON_RESOLUTION[size][1]//2+10]) > 200
   if light_clothing:
     # Random contrast adjustment
     beta = uniform(-30,-50)
@@ -153,40 +160,43 @@ def create_augmented_training_sample(person_original_img:np.ndarray, clothing_im
 
 
 COLOR_AQUA = (255, 255, 0) # BGR format
-def create_final_dataset_vton_s_to_s():
+def create_final_dataset_vton_size_to_size(size='s'):
   ready_datasets = '/home/yoni/Desktop/f/data/ready_datasets'
-  target_dir = os.path.join(ready_datasets, 'vton_s_to_s')
+  target_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}')
   os.makedirs(target_dir, exist_ok=True)
-  target_inspection_dir = os.path.join(ready_datasets, 'vton_s_to_s_inspection')
+  target_inspection_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}_inspection')
   os.makedirs(target_inspection_dir, exist_ok=True)
-  log_filepath = os.path.join(ready_datasets, 'vton_s_to_s_log.txt')
+  log_filepath = os.path.join(ready_datasets, f'vton_{size}_to_{size}_log.txt')
   data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses']
   # How many additional (augmented) training samples should be created 
   # from an original training sample, coming from a particular data source.
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
   prob_aug = {'misc_online': 1, 'multi_pose': 0.1, 'paired_high_res':0, 'same_person_two_poses':0.15}
-  # prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0, 'same_person_two_poses':1}
+  prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0.5, 'same_person_two_poses':1}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:
     for data_source_dir_name in data_sources:
       num_training_samples_before_this_data_source = num_training_samples
-      person_original_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'person_original', 's')
-      clothing_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'clothing', 's')
-      pose_keypoints_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'pose_keypoints', 's')
-      person_with_masked_clothing_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'person_with_masked_clothing', 's')
-      mask_coordinates_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'mask_coordinates', 's')
+      person_original_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'person_original', size)
+      clothing_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'clothing', size)
+      pose_keypoints_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'pose_keypoints', size)
+      person_with_masked_clothing_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'person_with_masked_clothing', size)
+      mask_coordinates_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'mask_coordinates', size)
       
-      def _save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
+      def _normalize_and_save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
         person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person_original.npy')
         clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.npy')
         person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person_with_masked_clothing.npy')
         pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
-        # TODO: Normalize to [-1,1] here.
-        np.save(person_original_filepath_final, person_original_img)
-        np.save(clothing_filepath_final, clothing_img)
-        np.save(person_with_masked_clothing_filepath_final, person_with_masked_clothing_img)
+        # Normalize to [-1,1].
+        person_original_img_norm = (person_original_img / 127.5) - 1
+        clothing_img_norm = (clothing_img / 127.5) - 1
+        person_with_masked_clothing_img_norm = (person_with_masked_clothing_img / 127.5) - 1
+        np.save(person_original_filepath_final, person_original_img_norm)
+        np.save(clothing_filepath_final, clothing_img_norm)
+        np.save(person_with_masked_clothing_filepath_final, person_with_masked_clothing_img_norm)
         with open(pose_keypoints_filepath_final, 'w') as pose_keypoints_file:
           pose_keypoints_file.write(str(pose_keypoints_list))
         if inspect:
@@ -228,7 +238,7 @@ def create_final_dataset_vton_s_to_s():
         with open(pose_keypoints_filepath, 'r') as pose_keypoints_file:
           pose_keypoints_list = eval(pose_keypoints_file.readlines()[0])
         training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_orig'
-        _save_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, pose_keypoints_list, training_sample_id_final, inspect)
+        _normalize_and_save_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, pose_keypoints_list, training_sample_id_final, inspect)
         num_training_samples += 1
                 
         num_augmentations = prob_aug[data_source_dir_name]
@@ -238,7 +248,7 @@ def create_final_dataset_vton_s_to_s():
             augmented_sample = create_augmented_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, mask_coordinates_arr, pose_keypoints_list)
             person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug = augmented_sample
             training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_aug'
-            _save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
+            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
         elif num_augmentations >= 0:
           mask_coordinates_arr = np.load(mask_coordinates_filepath).astype(np.uint8)
@@ -246,7 +256,7 @@ def create_final_dataset_vton_s_to_s():
             augmented_sample = create_augmented_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, mask_coordinates_arr, pose_keypoints_list)
             person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug = augmented_sample
             training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_aug'
-            _save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
+            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
         # if num_training_samples > 100:
@@ -256,4 +266,4 @@ def create_final_dataset_vton_s_to_s():
   print(f'FINISHED, total of {num_training_samples} samples')      
 
 
-create_final_dataset_vton_s_to_s()
+create_final_dataset_vton_size_to_size(size=size)

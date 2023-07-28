@@ -37,11 +37,15 @@ if __name__ == '__main__':
     img_height = c.VTON_RESOLUTION[img_size][0]
     img_width = c.VTON_RESOLUTION[img_size][1]
 
-    # model = Unet_Person_Masked(channels=6, level_dims=(360, 360, 360),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
+    model = Unet_Person_Masked(channels=6, level_dims=(360, 360, 360),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
     # model = Unet_Person_Masked(channels=6, level_dims=(460, 460, 460),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    model = Unet_Person_Masked(channels=6, level_dims=(16, 16, 16),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
+    # model = Unet_Person_Masked(channels=6, level_dims=(16, 16, 16),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
+    # model2 = Unet_Clothing(channels=6, level_dims=(16, 16, 16),level_repetitions = (4,5,6),)
+    model2 = Unet_Clothing(channels=6, level_dims=(360, 360, 360),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
     total_params = sum(p.numel() for p in model.parameters())
-    print(f'Total parameters in the model: {total_params}')
+    print(f'Total parameters in the model: {total_params:,}')
+    total_params2 = sum(p.numel() for p in model2.parameters())
+    print(f'Total parameters in the model: {total_params2:,}')
     model.to(c.DEVICE)
 
     # initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
@@ -98,8 +102,9 @@ if __name__ == '__main__':
         torch.autograd.profiler.profile(enabled=False)
         torch.autograd.gradcheck_enabled = False
         
-
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
+        training_start_time = time.time()
+        batch_training_end_time = training_start_time
         for epoch in range(epochs):
             for step, batch in enumerate(train_dataloader):
                 # Code for finding maximum learning rate.
@@ -113,7 +118,6 @@ if __name__ == '__main__':
                 # if mini_batch_counter < 10000:
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[mini_batch_counter]
-                        
                 optimizer.zero_grad(set_to_none=True)
                 batch_num += 1
                 clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing, noise_amount_masked = batch
@@ -128,18 +132,25 @@ if __name__ == '__main__':
                 else:
                     t = torch.randint(0, c.NUM_TIMESTEPS, (batch_size,), device=c.DEVICE)
                 
-                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                batch_training_start_time = time.time()  
+                
+                # TODO: This still needs to be analyzed for correctness.
+                with torch.cuda.amp.autocast(dtype=torch.float16):
                     loss = p_losses(model, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
-
-                if batch_num % 100 == 0:
-                    print(f'Loss for epoch {epoch}, batch {batch_num}:', loss.item())
-
                 scaler.scale(loss).backward() # loss.backward()
                 scaler.step(optimizer) # optimizer.step()
                 scaler.update()
+                
+                batch_training_end_time_prev = batch_training_end_time
+                batch_training_end_time = time.time()
+                if batch_num % 1 == 0:
+                    training_batch_time = batch_training_end_time - batch_training_start_time
+                entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
+                print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                
                 ema.step_ema(ema_model, model)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model, optimizer, batch_num)
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model, optimizer, batch_num, save_from_this_batch_num=1000)
                 if num_batches_since_min_loss > 10000:
                     if num_batches_since_min_loss > 25000:
                         sys.exit('Loss has not improved for 25,000 batches. Terminating the flow.')
@@ -151,7 +162,7 @@ if __name__ == '__main__':
                         print(lr_reduction_msg)
                         log_file.write(lr_reduction_msg)
                 elif num_batches_since_min_loss == 0:
-                    loss_decrease_msg = f'LOSS DECREASED & MODEL SAVED, at batch num: {batch_num}\n'
+                    loss_decrease_msg = f'LOSS DECREASED, at batch num: {batch_num}\n'
                     print(loss_decrease_msg)
                     log_file.write(loss_decrease_msg)
 

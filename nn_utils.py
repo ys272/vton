@@ -292,18 +292,19 @@ class TrainerHelper:
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
     
-    def update_loss_possibly_save_model(self, loss, model, optimizer, batch_num):
+    def update_loss_possibly_save_model(self, loss, model, optimizer, batch_num, save_from_this_batch_num=0):
         if loss < self.min_loss:
             self.min_loss = loss
             self.min_loss_batch_num = batch_num
-            save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
-            torch.save({
-                'batch_num': batch_num,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss,
-                'learning_rate': optimizer.param_groups[0]['lr'],
-            }, save_path)
+            if batch_num >= save_from_this_batch_num:
+                save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
+                torch.save({
+                    'batch_num': batch_num,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
+                    'learning_rate': optimizer.param_groups[0]['lr'],
+                }, save_path)
         
         return batch_num - self.min_loss_batch_num
     

@@ -101,6 +101,7 @@ class Unet_Person_Masked(nn.Module):
         # self.final_res_block = ResnetBlock(dim * 2, dim, time_emb_dim=time_dim)
         self.final_conv = nn.Conv2d(level_dims[0], self.out_dim, 3, padding=1)
 
+
     def forward(self, masked_aug, pose, noise_amount_masked, t):
 
         x = self.init_conv(masked_aug)
@@ -163,6 +164,129 @@ class Unet_Person_Masked(nn.Module):
         
         return self.final_conv(x)
 
+
+class Unet_Clothing(nn.Module):
+    def __init__(
+        self,
+        init_dim=16,
+        level_dims=(32, 48, 64),
+        level_repetitions = (2,3,4),
+        channels=3,
+    ):
+        super().__init__()
+        
+        self.level_dims = level_dims
+        self.level_repetitions = level_repetitions
+                
+        # time embeddings
+        time_dim = init_dim * 4
+        
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(init_dim),
+            nn.Linear(init_dim, time_dim),
+            nn.GELU(),
+            nn.Linear(time_dim, time_dim),
+        )
+        self.masked_person_pose_mlp = None
+        self.masked_person_aug_mlp = None
+        self.combined_embedding_masked_person = None
+        
+        self.masked_person_pose_mlp = None
+        self.clothing_aug_mlp = None
+        self.combined_embedding_clothing = None
+        
+        self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
+
+        self.downs = nn.ModuleList([])
+        self.mid1 = None
+        self.mid2 = None
+        self.ups = nn.ModuleList([])
+        
+        # Down levels
+        for level_idx in range(len(level_dims)-1):
+            dim_in = init_dim if level_idx == 0 else level_dims[level_idx-1]
+            dim_out = level_dims[level_idx]
+            level_reps = level_repetitions[level_idx]
+            layers = []
+            for rep in range(level_reps):
+                layers.append(ResnetBlock(dim_in if rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
+            layers.append(Downsample(dim_out, dim_out))
+            self.downs.append(nn.ModuleList(layers))
+
+        # Middle level
+        # First half
+        dim_in = level_dims[-2]
+        dim_out = level_dims[-1]
+        level_reps = level_repetitions[-1]
+        layers = []
+        for rep in range(level_reps):
+            layers.append(ResnetBlock(dim_in if rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
+        self.mid1 = nn.ModuleList(layers)
+        
+        # Second half
+        layers = []
+        for rep in range(level_reps):
+            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, time_emb_dim=time_dim))
+        self.mid2 = nn.ModuleList(layers)
+
+        # Up level
+        for level_idx in [len(level_dims)-2]:
+            dim_in = level_dims[level_idx+1]
+            dim_out = level_dims[level_idx]
+            level_reps = level_repetitions[level_idx]
+            layers = []
+            layers.append(Upsample(dim_in, dim_in))
+            for rep in range(level_reps):
+                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, time_emb_dim=time_dim))
+            self.ups.append(nn.ModuleList(layers))
+
+        self.out_dim = 3
+        # self.final_res_block = ResnetBlock(dim * 2, dim, time_emb_dim=time_dim)
+        self.final_conv = nn.Conv2d(level_dims[0], self.out_dim, 3, padding=1)
+
+
+    def forward(self, clothing_aug, pose, noise_amount_clothing, t):
+
+        x = self.init_conv(clothing_aug)
+        # r = x.clone()
+        t = self.time_mlp(t)
+
+        h = []
+
+        for level_idx in range(len(self.downs)):
+            for layer_idx in range(0, len(self.downs[level_idx])-1):
+                res_block = self.downs[level_idx][layer_idx]
+                x = res_block(x, t)
+                h.append(x)
+            downsample = self.downs[level_idx][-1]
+            x = downsample(x)
+
+        h_middle = []
+        for mid_layer_idx in range(len(self.mid1)):
+            res_block = self.mid1[mid_layer_idx]
+            x = res_block(x, t)
+            if mid_layer_idx != len(self.mid1) - 1:
+                h_middle.append(x)
+                        
+        for mid_layer_idx in range(len(self.mid2)):
+            res_block = self.mid2[mid_layer_idx]
+            if mid_layer_idx != 0:
+                x = torch.cat((x, h_middle.pop()), dim=1)
+            x = res_block(x, t)
+                
+        for level_idx in range(len(self.ups)):
+            upsample = self.ups[level_idx][0]
+            x = upsample(x)
+            for layer_idx in range(1, len(self.ups[level_idx])):
+                res_block = self.ups[level_idx][layer_idx]
+                x = torch.cat((x, h.pop()), dim=1)
+                x = res_block(x, t)
+
+        # x = torch.cat((x, r), dim=1)
+        # x = self.final_res_block(x, t)
+        
+        return self.final_conv(x)
+    
 
 # image_size = 28
 # num_channels = 1

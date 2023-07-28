@@ -57,6 +57,7 @@ def extract(a, t, x_shape):
     the resulting 1D array to e.g [batch_size, 1, 1, 1, 1] so it can be broadcasted with the downstream matrix.
     '''
     batch_size = t.shape[0]
+    # TODO: Can this call to "cpu" be removed?
     out = a.gather(-1, t.cpu())
     return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)
 
@@ -155,13 +156,12 @@ def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_
             reverse_sampler_func = partial(p_sample_ddim, eta=eta)
         else:
             reverse_sampler_func = p_sample_ddim
-    device = next(model.parameters()).device
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
-    img = torch.randn(shape, device=device) * c.NOISE_SCALING_FACTOR
+    img = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
     imgs = []
     for timestep in tqdm(reversed(range(0, c.NUM_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_TIMESTEPS):
-        img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=device, dtype=torch.long), timestep, clip_model_output=clip_model_output)
+        img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=c.DEVICE, dtype=torch.long), timestep, clip_model_output=clip_model_output)
         imgs.append(img.cpu().numpy())
     return imgs
 

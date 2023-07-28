@@ -11,8 +11,61 @@ from data_preprocessing_vton.schp import extract_person_without_clothing
 from config import VTON_RESOLUTION
 from random import random, uniform
 from typing import Tuple, List
+import torch.nn.functional as F
+import torch
 
 
+class GaussianBlur():
+    def __init__(self, kernel_size):
+        self.kernel_size = kernel_size
+
+    def __call__(self, img, sigma):
+        # Convert the image tensor to a PyTorch tensor
+        # img_tensor = torch.tensor(img).permute(2, 0, 1).unsqueeze(0).float()
+        img_tensor = torch.tensor(img).unsqueeze(0).float()
+        # Generate a random sigma value
+        sigma = torch.tensor(sigma)
+        # Apply Gaussian blur using the specified kernel size and sigma
+        img_blurred = self.apply_gaussian_blur(img_tensor, self.kernel_size, sigma)
+        # Convert the blurred tensor back to an image tensor with shape H,W,3
+        # blurred_image = img_blurred.squeeze(0).permute(1, 2, 0)
+        blurred_image = img_blurred.squeeze(0)
+        return blurred_image
+
+    def apply_gaussian_blur(self, img, kernel_size, sigma):
+        # Calculate padding required for 'same' convolution
+        padding = kernel_size // 2
+        # Create separate kernel tensors for each channel
+        kernel_tensors = [self.create_gaussian_kernel(kernel_size, sigma) for _ in range(img.size(1))]
+        # Perform 2D convolution on each channel independently
+        img_blurred_channels = [F.conv2d(img[:, i:i+1], kernel_tensors[i], padding=padding) for i in range(img.size(1))]
+        # Concatenate the blurred channels back into an RGB image
+        img_blurred = torch.cat(img_blurred_channels, dim=1)
+        return img_blurred
+
+    def create_gaussian_kernel(self, kernel_size, sigma):
+        # Create the 1D Gaussian kernel
+        kernel_range = torch.arange(-(kernel_size // 2), kernel_size // 2 + 1, dtype=torch.float32)
+        kernel = torch.exp(-0.5 * (kernel_range / sigma)**2)
+        kernel /= kernel.sum()
+        # Extend the 1D kernel to 2D
+        kernel_2d = torch.outer(kernel, kernel).unsqueeze(0).unsqueeze(0)
+        return kernel_2d
+
+'''
+# Example usage:
+img = torch.from_numpy(cv2.imread('/home/yoni/Desktop/test_images/16.jpg'))#8
+img = img.to(torch.float)/255
+kernel_size_value = 5
+gaussian_blur = GaussianBlur(kernel_size_value)
+blur_values = [0.5, 0.66, 0.83, 1, 1.33, 1.66, 2, 3, 4, 5]
+cv2.imwrite(f'/home/yoni/Desktop/test/b0_orig.png', (img.cpu().numpy()*255).astype(np.uint8))
+for idx,sigma in enumerate(blur_values):
+  new_img = gaussian_blur(img, sigma)
+  cv2.imwrite(f'/home/yoni/Desktop/test/b0_{idx}.png', (new_img.cpu().numpy()*255).astype(np.uint8))
+'''
+
+   
 def diff_training_sample_ids_btwn_dirs(dir1, dir2):
   diff = 0
   for i in os.listdir(base_dir):
@@ -21,6 +74,7 @@ def diff_training_sample_ids_btwn_dirs(dir1, dir2):
       diff += 1
   print(diff)
   
+
 base_dir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/schp_raw_output/densepose/'
 base_dir2 = '/home/yoni/Desktop/processed_data_vton/same_person_two_poses/person_original/m/'
 # diff_training_sample_ids_btwn_dirs(base_dir, base_dir2)    
@@ -49,11 +103,6 @@ def improve_contrast_process(clothing_dir, person_original_dir):
         cv2.imwrite(clothing_img_path, clothing_img)
         cv2.imwrite(person_original_img_path, person_original_img)
         
-size = 't'
-new_height = VTON_RESOLUTION[size][0]
-new_width = VTON_RESOLUTION[size][1]
-downsample_factor_per_size = {'s':2, 't':4}
-downsample_factor = downsample_factor_per_size[size]
 
 def downsample_mask_arr(arr):
   '''
@@ -117,8 +166,6 @@ def create_downsampled_data_from_m_all(size='s'):
 
     create_downsampled_data_from_m(data_source_sub_dirs_paths, size)
     print(f'finished handling data source: {data_source}')
-
-# create_downsampled_data_from_m_all(size=size)
   
   
 def create_augmented_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, mask_coordinates_arr:np.ndarray, pose_keypoints_list:List) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -186,23 +233,33 @@ def create_final_dataset_vton_size_to_size(size='s'):
       mask_coordinates_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'mask_coordinates', size)
       
       def _normalize_and_save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
-        person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person_original.npy')
-        clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.npy')
-        person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person_with_masked_clothing.npy')
+        person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person.pth')
+        clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.pth')
+        person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_masked.pth')
         pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
         # Normalize to [-1,1].
         person_original_img_norm = (person_original_img / 127.5) - 1
         clothing_img_norm = (clothing_img / 127.5) - 1
         person_with_masked_clothing_img_norm = (person_with_masked_clothing_img / 127.5) - 1
-        np.save(person_original_filepath_final, person_original_img_norm)
-        np.save(clothing_filepath_final, clothing_img_norm)
-        np.save(person_with_masked_clothing_filepath_final, person_with_masked_clothing_img_norm)
+        # Permute order of dimensions so that the channel is first.
+        person_original_img_norm = person_original_img_norm.transpose(2,0,1)
+        clothing_img_norm = clothing_img_norm.transpose(2,0,1)
+        person_with_masked_clothing_img_norm = person_with_masked_clothing_img_norm.transpose(2,0,1)
+        # Cast to float 16, and reverse the order of dimensions from BGR to RGB.
+        person_original_img_norm = np.copy(person_original_img_norm.astype(np.float16)[::-1])
+        clothing_img_norm = np.copy(clothing_img_norm.astype(np.float16)[::-1])
+        person_with_masked_clothing_img_norm = np.copy(person_with_masked_clothing_img_norm.astype(np.float16)[::-1])
+        torch.save(torch.tensor(person_original_img_norm), person_original_filepath_final)
+        torch.save(torch.tensor(clothing_img_norm), clothing_filepath_final)
+        torch.save(torch.tensor(person_with_masked_clothing_img_norm), person_with_masked_clothing_filepath_final)
+        
+        
         with open(pose_keypoints_filepath_final, 'w') as pose_keypoints_file:
           pose_keypoints_file.write(str(pose_keypoints_list))
         if inspect:
-          person_original_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_person_original.jpg')
+          person_original_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_person.jpg')
           clothing_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_clothing.jpg')
-          person_with_masked_clothing_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_person_with_masked_clothing.jpg')
+          person_with_masked_clothing_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_masked.jpg')
           person_with_keypoints_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_pose.jpg')
           cv2.imwrite(person_original_filepath_final, person_original_img)
           cv2.imwrite(clothing_filepath_final, clothing_img)
@@ -259,11 +316,18 @@ def create_final_dataset_vton_size_to_size(size='s'):
             _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
-        # if num_training_samples > 100:
-        #   return
+        if num_training_samples > 100:
+          return
       
       print(f'finished {data_source_dir_name}, processed {num_training_samples - num_training_samples_before_this_data_source} samples') 
   print(f'FINISHED, total of {num_training_samples} samples')      
 
 
-create_final_dataset_vton_size_to_size(size=size)
+downsample_factor_per_size = {'s':2, 't':4}
+for size in ['s']:#,'s']:
+  new_height = VTON_RESOLUTION[size][0]
+  new_width = VTON_RESOLUTION[size][1]
+  downsample_factor = downsample_factor_per_size[size]
+
+  # create_downsampled_data_from_m_all(size=size)
+  create_final_dataset_vton_size_to_size(size=size)

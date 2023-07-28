@@ -10,128 +10,138 @@ import torch.nn.functional as F
 from torchviz import make_dot
 from nn_utils import *
 
-
-class Unet(nn.Module):
+    
+class Unet_Person_Masked(nn.Module):
     def __init__(
         self,
-        dim,
-        init_dim=None,
-        out_dim=None,
-        dim_mults=(1, 2, 4, 8),
+        init_dim=16,
+        level_dims=(32, 48, 64),
+        level_attentions=(False, True),
+        level_repetitions = (2,3,4),
         channels=3,
-        self_condition=False
     ):
         super().__init__()
-
-        # determine dimensions
-        self.self_condition = self_condition
-        input_channels = channels * (2 if self_condition else 1)
-
-        init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv2d(input_channels, init_dim, 1, padding=0) 
-
-        dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
-        in_out = list(zip(dims[:-1], dims[1:]))
-
+        
+        self.level_attentions = level_attentions
+        self.level_dims = level_dims
+        self.level_repetitions = level_repetitions
+                
         # time embeddings
-        time_dim = dim * 4
-
+        time_dim = init_dim * 4
+        
         self.time_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(dim),
-            nn.Linear(dim, time_dim),
+            SinusoidalPositionEmbeddings(init_dim),
+            nn.Linear(init_dim, time_dim),
             nn.GELU(),
             nn.Linear(time_dim, time_dim),
         )
+        self.masked_person_pose_mlp = None
+        self.masked_person_aug_mlp = None
+        self.combined_embedding_masked_person = None
+        
+        self.masked_person_pose_mlp = None
+        self.clothing_aug_mlp = None
+        self.combined_embedding_clothing = None
+        
+        self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
-        # layers
         self.downs = nn.ModuleList([])
+        self.mid = None
         self.ups = nn.ModuleList([])
-        num_resolutions = len(in_out)
+        
+        # Down levels
+        for level_idx in range(len(level_dims)-1):
+            dim_in = init_dim if level_idx == 0 else level_dims[level_idx-1]
+            dim_out = level_dims[level_idx]
+            level_att = level_attentions[level_idx]
+            level_reps = level_repetitions[level_idx]
+            layers = []
+            for rep in range(level_reps):
+                layers.append(ResnetBlock(dim_in if rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
+                if level_att:
+                    layers.append(Residual(PreNorm(dim_out, Attention(dim_out))))
+            layers.append(Downsample(dim_out, dim_out))
+            self.downs.append(nn.ModuleList(layers))
 
-        for ind, (dim_in, dim_out) in enumerate(in_out):
-            # TODO: Experiment with removing this. Essentially there is an additional block before the 
-            # middle of the U, not doing any downsampling.
-            is_last = ind >= (num_resolutions - 1)
+        # Middle level
+        dim_in = level_dims[-2]
+        dim_out = level_dims[-1]
+        level_reps = level_repetitions[-1]
+        layers = []
+        for rep in range(level_reps):
+            layers.append(ResnetBlock(dim_in if rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
+            layers.append(Residual(PreNorm(dim_out, Attention(dim_out))))
+        self.mid = nn.ModuleList(layers)
 
-            self.downs.append(
-                nn.ModuleList(
-                    [
-                        ResnetBlock(dim_in, dim_in, time_emb_dim=time_dim),
-                        ResnetBlock(dim_in, dim_in, time_emb_dim=time_dim),
-                        Residual(PreNorm(dim_in, LinearAttention(dim_in))),
-                        Downsample(dim_in, dim_out)
-                        if not is_last
-                        else nn.Conv2d(dim_in, dim_out, 3, padding=1),
-                    ]
-                )
-            )
+        # Up level
+        for level_idx in range(len(level_dims)-2,-1,-1):
+            dim_in = level_dims[level_idx+1]
+            dim_out = level_dims[level_idx]
+            level_att = level_attentions[level_idx]
+            level_reps = level_repetitions[level_idx]
+            layers = []
+            layers.append(Upsample(dim_in, dim_in))
+            for rep in range(level_reps):
+                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, time_emb_dim=time_dim))
+                if level_att:
+                    layers.append(Residual(PreNorm(dim_out, Attention(dim_out))))
+            self.ups.append(nn.ModuleList(layers))
 
-        mid_dim = dims[-1]
-        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=time_dim)
-        self.mid_attn = Residual(PreNorm(mid_dim, Attention(mid_dim)))
-        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=time_dim)
+        self.out_dim = 3
+        # self.final_res_block = ResnetBlock(dim * 2, dim, time_emb_dim=time_dim)
+        self.final_conv = nn.Conv2d(level_dims[0], self.out_dim, 3, padding=1)
 
-        for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
-            is_last = ind == (len(in_out) - 1)
+    def forward(self, masked_aug, pose, noise_amount_masked, t):
 
-            self.ups.append(
-                nn.ModuleList(
-                    [
-                        ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
-                        ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
-                        Residual(PreNorm(dim_out, LinearAttention(dim_out))),
-                        Upsample(dim_out, dim_in)
-                        if not is_last
-                        else nn.Conv2d(dim_out, dim_in, 3, padding=1),
-                    ]
-                )
-            )
-
-        self.out_dim = default(out_dim, channels)
-
-        self.final_res_block = ResnetBlock(dim * 2, dim, time_emb_dim=time_dim)
-        self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
-
-    def forward(self, x, time, x_self_cond=None):
-        if self.self_condition:
-            x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
-            x = torch.cat((x_self_cond, x), dim=1)
-
-        x = self.init_conv(x)
-        r = x.clone()
-
-        t = self.time_mlp(time)
+        x = self.init_conv(masked_aug)
+        # r = x.clone()
+        t = self.time_mlp(t)
 
         h = []
 
-        for block1, block2, attn, downsample in self.downs:
-            x = block1(x, t)
-            h.append(x)
-
-            x = block2(x, t)
-            x = attn(x)
-            h.append(x)
-
+        for level_idx in range(len(self.downs)):
+            level_att = self.level_attentions[level_idx]
+            for layer_idx in range(0, len(self.downs[level_idx])-1, 2):
+                res_block = self.downs[level_idx][layer_idx]
+                x = res_block(x, t)
+                h.append(x)
+                if level_att:
+                    attention = self.downs[level_idx][layer_idx+1]
+                    x = attention(x)
+                else:
+                    res_block = self.downs[level_idx][layer_idx+1]
+                    x = res_block(x, t)
+                    h.append(x)
+            downsample = self.downs[level_idx][-1]
             x = downsample(x)
 
-        x = self.mid_block1(x, t)
-        x = self.mid_attn(x)
-        x = self.mid_block2(x, t)
+        for idx in range(0, len(self.mid), 2):
+            res_block = self.mid[idx]
+            attention = self.mid[idx+1]
+            x = res_block(x, t)
+            x = attention(x)
 
-        for block1, block2, attn, upsample in self.ups:
-            x = torch.cat((x, h.pop()), dim=1)
-            x = block1(x, t)
-
-            x = torch.cat((x, h.pop()), dim=1)
-            x = block2(x, t)
-            x = attn(x)
-
+        for level_idx in range(len(self.ups)):
+            level_att = self.level_attentions[len(self.level_attentions) - 1 - level_idx]
+            upsample = self.ups[level_idx][0]
             x = upsample(x)
+            for layer_idx in range(1, len(self.ups[level_idx]), 2):
+                res_block = self.ups[level_idx][layer_idx]
+                x = torch.cat((x, h.pop()), dim=1)
+                x = res_block(x, t)
+                if level_att:
+                    attention = self.ups[level_idx][layer_idx+1]
+                    x = attention(x)
+                else:
+                    res_block = self.ups[level_idx][layer_idx+1]
+                    x = torch.cat((x, h.pop()), dim=1)
+                    x = res_block(x, t)
 
-        x = torch.cat((x, r), dim=1)
-
-        x = self.final_res_block(x, t)
+        # x = torch.cat((x, r), dim=1)
+        # x = self.final_res_block(x, t)
+        
         return self.final_conv(x)
+
 
 # image_size = 28
 # num_channels = 1

@@ -32,6 +32,7 @@ dirs = [MODEL_OUTPUT_DIR, MODEL_OUTPUT_PARAMS_DIR, MODEL_OUTPUT_TBOARD_DIR, MODE
 for dir in dirs:
     os.makedirs(dir, exist_ok=True)
 
+READY_DATASETS_DIR = os.path.join(DATA_DIR, 'ready_datasets')
 
 '''
 pose model
@@ -95,4 +96,7 @@ General
 '''
 
 DEVICE = 'cuda'
-BATCH_SIZE = 64
+BATCH_SIZE = 8
+RANDOM_SEED = 7
+IMAGE_SIZE = 's'
+OPTIMIZE = True

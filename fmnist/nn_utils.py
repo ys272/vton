@@ -107,14 +107,15 @@ class Block(nn.Module):
     def __init__(self, dim, dim_out, groups=4):
         super().__init__()
         self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
-        self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
+        self.norm = nn.GroupNorm(groups, dim_out)
         # self.norm = nn.GroupNorm(groups, dim)
         # self.act = nn.SiLU()
         # self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
 
     def forward(self, x, scale_shift=None):
         x = self.proj(x)
+        x = self.act(x)
         x = self.norm(x)
 
         if scale_shift is not None:
@@ -130,7 +131,6 @@ class Block(nn.Module):
         #     scale, shift = scale_shift
         #     # TODO: Experiment if removing the +1 makes a meaningful difference.
         #     x = x * (scale + 1) + shift
-        x = self.act(x)
         return x
 
 
@@ -314,18 +314,16 @@ class TrainerHelper:
         return batch_num - self.last_learning_rate_reduction
     
 
-def p_losses(denoise_model, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
+def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
     if noise is None:
-        noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
+        noise = torch.randn_like(x_start) * c.NOISE_SCALING_FACTOR
 
     if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-        x_noisy, noise = q_sample_karras(person, t, noise=noise)
-        x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
-        predicted_noise = denoise_model(x_noisy_and_masked_aug, pose, noise_amount_masked, t)
+        x_noisy, noise = q_sample_karras(x_start, t, noise=noise)
+        predicted_noise = denoise_model(x_noisy, t)
     else:
-        x_noisy = q_sample(person, t=t, noise=noise)
-        x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
-        predicted_noise = denoise_model(x_noisy_and_masked_aug, pose, noise_amount_masked, t)
+        x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
+        predicted_noise = denoise_model(x_noisy, t)
     
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise)

@@ -38,8 +38,8 @@ if __name__ == '__main__':
     img_width = c.VTON_RESOLUTION[img_size][1]
 
     # model = Unet_Person_Masked(channels=6, level_dims=(360, 360, 360),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    model = Unet_Person_Masked(channels=6, level_dims=(460, 460, 460),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    # model = Unet_Person_Masked(channels=6, level_dims=(16, 16, 16),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
+    # model = Unet_Person_Masked(channels=6, level_dims=(460, 460, 460),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
+    model = Unet_Person_Masked(channels=6, level_dims=(16, 16, 16),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
     total_params = sum(p.numel() for p in model.parameters())
     print(f'Total parameters in the model: {total_params}')
     model.to(c.DEVICE)

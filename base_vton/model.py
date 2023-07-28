@@ -1,3 +1,4 @@
+import copy
 import math
 from inspect import isfunction
 from functools import partial
@@ -46,7 +47,8 @@ class Unet_Person_Masked(nn.Module):
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
         self.downs = nn.ModuleList([])
-        self.mid = None
+        self.mid1 = None
+        self.mid2 = None
         self.ups = nn.ModuleList([])
         
         # Down levels
@@ -64,6 +66,7 @@ class Unet_Person_Masked(nn.Module):
             self.downs.append(nn.ModuleList(layers))
 
         # Middle level
+        # First half
         dim_in = level_dims[-2]
         dim_out = level_dims[-1]
         level_reps = level_repetitions[-1]
@@ -71,7 +74,14 @@ class Unet_Person_Masked(nn.Module):
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_in if rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
             layers.append(Residual(PreNorm(dim_out, Attention(dim_out))))
-        self.mid = nn.ModuleList(layers)
+        self.mid1 = nn.ModuleList(layers)
+        
+        # Second half
+        layers = []
+        for rep in range(level_reps):
+            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, time_emb_dim=time_dim))
+            layers.append(Residual(PreNorm(dim_out, Attention(dim_out))))
+        self.mid2 = nn.ModuleList(layers)
 
         # Up level
         for level_idx in range(len(level_dims)-2,-1,-1):
@@ -115,12 +125,23 @@ class Unet_Person_Masked(nn.Module):
             downsample = self.downs[level_idx][-1]
             x = downsample(x)
 
-        for idx in range(0, len(self.mid), 2):
-            res_block = self.mid[idx]
-            attention = self.mid[idx+1]
+        h_middle = []
+        for mid_layer_idx in range(0, len(self.mid1), 2):
+            res_block = self.mid1[mid_layer_idx]
+            attention = self.mid1[mid_layer_idx+1]
             x = res_block(x, t)
             x = attention(x)
-
+            if mid_layer_idx != len(self.mid1) - 2:
+                h_middle.append(x)
+        
+        for mid_layer_idx in range(0, len(self.mid2), 2):
+            res_block = self.mid2[mid_layer_idx]
+            attention = self.mid2[mid_layer_idx+1]
+            if mid_layer_idx != 0:
+                x = torch.cat((x, h_middle.pop()), dim=1)
+            x = res_block(x, t)
+            x = attention(x)
+                
         for level_idx in range(len(self.ups)):
             level_att = self.level_attentions[len(self.level_attentions) - 1 - level_idx]
             upsample = self.ups[level_idx][0]

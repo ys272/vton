@@ -53,9 +53,11 @@ class Residual(nn.Module):
         super().__init__()
         self.fn = fn
 
-    def forward(self, x, *args, **kwargs):
-        return self.fn(x, *args, **kwargs) + x
-
+    def forward(self, x, y=None, *args, **kwargs):
+        if y is None:
+            return self.fn(x, *args, **kwargs) + x
+        else:
+            return self.fn(x, y, *args, **kwargs) + x
 
 def Upsample(dim, dim_out=None):
     return nn.Sequential(
@@ -78,7 +80,6 @@ class WeightStandardizedConv2d(nn.Conv2d):
     https://arxiv.org/abs/1903.10520
     weight standardization purportedly works synergistically with group normalization
     """
-
     def forward(self, x):
         eps = 1e-5 if x.dtype == torch.float32 else 1e-3
         '''
@@ -109,10 +110,7 @@ class Block(nn.Module):
         self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
-        # self.norm = nn.GroupNorm(groups, dim)
-        # self.act = nn.SiLU()
-        # self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
-
+   
     def forward(self, x, scale_shift=None):
         x = self.proj(x)
         x = self.norm(x)
@@ -121,15 +119,35 @@ class Block(nn.Module):
             scale, shift = scale_shift
             # TODO: Experiment if removing the +1 makes a meaningful difference.
             x = x * (scale + 1) + shift        
+
+        x = self.act(x)
+        return x
+    
+    
+class BlockClothing(nn.Module):
+    def __init__(self, dim, dim_out, groups=4):
+        super().__init__()
+        dilation_rate = 2
+        kernel_size = 7
+        out_channels_dilated = 5
+        padding = dilation_rate * (kernel_size - 1) // 2
+        self.proj_dilated = WeightStandardizedConv2d(dim, out_channels_dilated, kernel_size, padding=padding, dilation=dilation_rate)
         
-        # x = self.norm(x)
-        # x = self.act(x)
-        # x = self.proj(x)
-        
-        # if scale_shift is not None:
-        #     scale, shift = scale_shift
-        #     # TODO: Experiment if removing the +1 makes a meaningful difference.
-        #     x = x * (scale + 1) + shift
+        self.proj_dense = WeightStandardizedConv2d(dim, dim_out - out_channels_dilated, 3, padding=1)
+        self.norm = nn.GroupNorm(groups, dim_out)
+        self.act = nn.SiLU()
+   
+    def forward(self, x, scale_shift=None):
+        x_dense = self.proj_dense(x)
+        x_dilated = self.proj_dilated(x)
+        x = torch.cat((x_dense,x_dilated), dim=1)
+        x = self.norm(x)
+
+        if scale_shift is not None:
+            scale, shift = scale_shift
+            # TODO: Experiment if removing the +1 makes a meaningful difference.
+            x = x * (scale + 1) + shift        
+
         x = self.act(x)
         return x
 
@@ -142,17 +160,18 @@ standard convolutional layer by a "weight standardized" version, which works bet
 group normalization (see (Kolesnikov et al., 2019) for details).
 '''
 
-
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=4):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=4, clothing=False):
         super().__init__()
         self.mlp = (
             nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2))
             if time_emb_dim is not None
             else None
         )
-
-        self.block1 = Block(dim, dim_out, groups=groups)
+        if not clothing:
+            self.block1 = Block(dim, dim_out, groups=groups)
+        else:
+            self.block1 = BlockClothing(dim, dim_out, groups=groups)
         self.block2 = Block(dim_out, dim_out, groups=groups)
         self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
@@ -173,7 +192,7 @@ class ResnetBlock(nn.Module):
 Attention
 '''
 
-class Attention(nn.Module):
+class SelfAttention(nn.Module):
     def __init__(self, dim, heads=4, dim_head=32):
         super().__init__()
         self.scale = dim_head ** -0.5
@@ -191,6 +210,44 @@ class Attention(nn.Module):
             lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qkv
         )
         q = q * self.scale
+        # since i==j==#elements, the resulting "b h i j" matrix dimensions are (batch, heads, # elements, # elements),
+        # representing the elementwise similarity (pre softmax)
+        sim = einsum("b h d i, b h d j -> b h i j", q, k)
+        # subtract the max for numerical stability when computing softmax (the sum of exponentiated 0s and negative
+        # values should be a relatively small number, while the original values may have been enormous)
+        sim = sim - sim.amax(dim=-1, keepdim=True).detach()
+        attn = sim.softmax(dim=-1)
+
+        out = einsum("b h i j, b h d j -> b h i d", attn, v)
+        out = rearrange(out, "b h (x y) d -> b (h d) x y", x=h, y=w)
+        return self.to_out(out)
+
+
+class CrossAttention(nn.Module):
+    def __init__(self, q_dim, kv_dim, heads=4, dim_head=32):
+        super().__init__()
+        self.scale = dim_head ** -0.5
+        self.heads = heads
+        hidden_dim = dim_head * heads
+        # linear projection, creating `dim_head` values for each head; for queries
+        self.to_q = nn.Conv2d(q_dim, hidden_dim, 1, bias=False)
+        # linear projection, creating `dim_head` values for each head; for keys and values.
+        self.to_kv = nn.Conv2d(kv_dim, hidden_dim * 2, 1, bias=False)
+        # project attention values back to original dimension so it can be added to original values.
+        self.to_out = nn.Conv2d(hidden_dim, q_dim, 1)
+
+    def forward(self, x_q, x_kv):
+        b, c, h, w = x_q.shape
+        
+        q = self.to_q(x_q)
+        q = rearrange(q, "b (h c) x y -> b h c (x y)", h=self.heads)
+        q = q * self.scale
+        
+        kv = self.to_kv(x_kv).chunk(2, dim=1)
+        k, v = map(
+            lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), kv
+        )
+        
         # since i==j==#elements, the resulting "b h i j" matrix dimensions are (batch, heads, # elements, # elements),
         # representing the elementwise similarity (pre softmax)
         sim = einsum("b h d i, b h d j -> b h i j", q, k)
@@ -239,7 +296,7 @@ TODO: Note that there's been a debate about whether to apply normalization
 before or after attention in Transformers.
 '''
 class PreNorm(nn.Module):
-    def __init__(self, dim, fn):
+    def __init__(self, fn, dim_x, dim_y=None):
         super().__init__()
         self.fn = fn
         # Since group size is 1, this is equivalent to layer normalization. 
@@ -247,11 +304,17 @@ class PreNorm(nn.Module):
         # unlike group normalization which is only across a subset of channels, where each subset contains 
         # a number of channels equal to num_channels / num_groups. In this function's case num_groups is 1, 
         # which as stated, makes the group normalization equivalent to layer normalization.
-        self.norm = nn.GroupNorm(1, dim)
+        self.norm_x = nn.GroupNorm(1, dim_x)
+        if dim_y is not None:
+            self.norm_y = nn.GroupNorm(1, dim_y)
 
-    def forward(self, x):
-        x = self.norm(x)
-        return self.fn(x)
+    def forward(self, x, y=None):
+        x = self.norm_x(x)
+        if y is None:
+            return self.fn(x)
+        else:
+            y = self.norm_y(y)
+            return self.fn(x, y)
 
 
 class EMA:
@@ -262,8 +325,11 @@ class EMA:
         self.was_i_initialized = False
         self.batch_num_when_ema_should_start = batch_num_when_ema_should_start
 
-    def update_model_average(self, ma_model, current_model):
-        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
+    def update_model_average(self, ema_model_main, model_main, ema_model_aux, model_aux):
+        for current_params, ma_params in zip(model_main.parameters(), ema_model_main.parameters()):
+            old_weight, up_weight = ma_params.data, current_params.data
+            ma_params.data = self.update_average(old_weight, up_weight)
+        for current_params, ma_params in zip(model_aux.parameters(), ema_model_aux.parameters()):
             old_weight, up_weight = ma_params.data, current_params.data
             ma_params.data = self.update_average(old_weight, up_weight)
 
@@ -272,17 +338,18 @@ class EMA:
             return new
         return old * self.beta + (1 - self.beta) * new
 
-    def step_ema(self, ema_model, model):
+    def step_ema(self, ema_model_main, model_main, ema_model_aux, model_aux):
         if self.batch_num >= self.batch_num_when_ema_should_start:
             if not self.was_i_initialized:
-                self.reset_parameters(ema_model, model)
+                self.reset_parameters(ema_model_main, model_main, ema_model_aux, model_aux)
                 self.was_i_initialized = True
             else:
-                self.update_model_average(ema_model, model)
+                self.update_model_average(ema_model_main, model_main, ema_model_aux, model_aux)
         self.batch_num += 1
 
-    def reset_parameters(self, ema_model, model):
-        ema_model.load_state_dict(model.state_dict())
+    def reset_parameters(self, ema_model_main, model_main, ema_model_aux, model_aux): 
+        ema_model_main.load_state_dict(model_main.state_dict())
+        ema_model_aux.load_state_dict(model_aux.state_dict())
         
         
 class TrainerHelper:
@@ -292,7 +359,7 @@ class TrainerHelper:
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
     
-    def update_loss_possibly_save_model(self, loss, model, optimizer, batch_num, save_from_this_batch_num=0):
+    def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, batch_num, save_from_this_batch_num=0):
         if loss < self.min_loss:
             self.min_loss = loss
             self.min_loss_batch_num = batch_num
@@ -300,7 +367,8 @@ class TrainerHelper:
                 save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
                 torch.save({
                     'batch_num': batch_num,
-                    'model_state_dict': model.state_dict(),
+                    'model_main_state_dict': model_main.state_dict(),
+                    'model_aux_state_dict': model_aux.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
                     'learning_rate': optimizer.param_groups[0]['lr'],
@@ -315,19 +383,19 @@ class TrainerHelper:
         return batch_num - self.last_learning_rate_reduction
     
 
-def p_losses(denoise_model, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
+def p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
     if noise is None:
         noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
 
     if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
         x_noisy, noise = q_sample_karras(person, t, noise=noise)
-        x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
-        predicted_noise = denoise_model(x_noisy_and_masked_aug, pose, noise_amount_masked, t)
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
-        x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
-        predicted_noise = denoise_model(x_noisy_and_masked_aug, pose, noise_amount_masked, t)
     
+    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
+    predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
+        
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise)
     elif loss_type == 'l2':

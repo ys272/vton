@@ -33,32 +33,30 @@ if __name__ == '__main__':
     human_readable_timestamp = current_date + description
     tb = SummaryWriter(log_dir=os.path.join(c.MODEL_OUTPUT_TBOARD_DIR, human_readable_timestamp))
     
-    img_size = c.IMAGE_SIZE
-    img_height = c.VTON_RESOLUTION[img_size][0]
-    img_width = c.VTON_RESOLUTION[img_size][1]
-
-    model = Unet_Person_Masked(channels=6, level_dims=(360, 360, 360),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    # model = Unet_Person_Masked(channels=6, level_dims=(460, 460, 460),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    # model = Unet_Person_Masked(channels=6, level_dims=(16, 16, 16),level_attentions=(False, True),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    # model2 = Unet_Clothing(channels=6, level_dims=(16, 16, 16),level_repetitions = (4,5,6),)
-    model2 = Unet_Clothing(channels=6, level_dims=(360, 360, 360),level_repetitions = (4,5,6),) # 3 for masked image, 3 for noise
-    total_params = sum(p.numel() for p in model.parameters())
-    print(f'Total parameters in the model: {total_params:,}')
-    total_params2 = sum(p.numel() for p in model2.parameters())
-    print(f'Total parameters in the model: {total_params2:,}')
-    model.to(c.DEVICE)
+    img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
+    img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
+    level_dims_main = (96, 160, 288, 460)
+    level_dims_aux = (64, 96, 128, 192)
+    level_attentions = (False, False, True)
+    level_repetitions_main = (3,4,5,6)
+    level_repetitions_aux = (3,4,4,4)
+    
+    model_main = Unet_Person_Masked(channels=6, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+    model_aux = Unet_Clothing(channels=3, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+    print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
+    print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
     # initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
     # final_learning_rate = 1e-4
     # learning_rates = np.linspace(1e-8, 1e-4, num=10000)
     initial_learning_rate = 1e-4
-    optimizer = Adam(model.parameters(), lr=initial_learning_rate, eps=1e-5)
+    optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     batch_num = 0
 
     # Load model from checkpoint.
     if False:
         model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '24-July_karras.pth'))
-        model.load_state_dict(model_state['model_state_dict'])
+        model_main.load_state_dict(model_state['model_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         batch_num = model_state['batch_num']
         initial_learning_rate = model_state['learning_rate']
@@ -83,17 +81,22 @@ if __name__ == '__main__':
     person = person.to(c.DEVICE)
     grid = torchvision.utils.make_grid(person)
     tb.add_image('images', grid)
-    t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
-    noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
-    noise_and_masked_aug = torch.cat((noise, masked_aug), dim=1).to(torch.float32)
-    input_tuple = (noise_and_masked_aug.to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_masked.to(torch.float32).to(c.DEVICE), t.to(c.DEVICE))
-    tb.add_graph(model, input_tuple)
-
+    
+    # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+    # noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
+    # noise_and_masked_aug = torch.cat((noise, masked_aug), dim=1).to(torch.float32)
+    # input_tuple_main = (noise_and_masked_aug.to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_masked.to(torch.float32).to(c.DEVICE), t.to(c.DEVICE))
+    # tb.add_graph(model_main, input_tuple_main)
+    # input_tuple_aux = (clothing_aug.to(torch.float32).to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_clothing.to(torch.float32).to(c.DEVICE))
+    # tb.add_graph(model_aux, input_tuple_aux)
+    
     epochs = 1000
     scaler = torch.cuda.amp.GradScaler()
     ema_batch_num_start = 50000
     ema = EMA(0.995, ema_batch_num_start)
-    ema_model = copy.deepcopy(model).eval().requires_grad_(False)
+    ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
+    ema_model_aux = copy.deepcopy(model_aux).eval().requires_grad_(False)
+    
     trainer_helper = TrainerHelper(human_readable_timestamp)
     # Enable cuDNN auto-tuner: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#enable-cudnn-auto-tuner
     torch.backends.cudnn.benchmark = True
@@ -136,21 +139,22 @@ if __name__ == '__main__':
                 
                 # TODO: This still needs to be analyzed for correctness.
                 with torch.cuda.amp.autocast(dtype=torch.float16):
-                    loss = p_losses(model, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
+                    loss = p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
                 scaler.scale(loss).backward() # loss.backward()
                 scaler.step(optimizer) # optimizer.step()
                 scaler.update()
                 
                 batch_training_end_time_prev = batch_training_end_time
                 batch_training_end_time = time.time()
-                if batch_num % 1 == 0:
-                    training_batch_time = batch_training_end_time - batch_training_start_time
+                training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
-                print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
-                ema.step_ema(ema_model, model)
+                if batch_num % 500 == 0 or batch_num % 1001 == 0:
+                    print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model, optimizer, batch_num, save_from_this_batch_num=1000)
+                ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
+                
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, batch_num, save_from_this_batch_num=1000)
                 if num_batches_since_min_loss > 10000:
                     if num_batches_since_min_loss > 25000:
                         sys.exit('Loss has not improved for 25,000 batches. Terminating the flow.')
@@ -167,27 +171,31 @@ if __name__ == '__main__':
                     log_file.write(loss_decrease_msg)
 
                 # Save generated images.
-                if batch_num != 0 and batch_num % 100 == 0:
+                if batch_num != 0 and batch_num % 1000 == 0:
+                    num_eval_samples = 4
                     # sample one random batch
                     random_samples = random.sample(list(iter(valid_dataloader)), 1)
                     clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
-                    clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
+                    inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
 
-                    for m,suffix in [(model, ''), (ema_model, '_ema')]:
+                    for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
                         if suffix == '_ema' and batch_num < ema_batch_num_start:
                                 continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                            img_sequences = p_sample_loop_karras(sample_euler_karras, model, steps=250)
+                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=250)
                         else:
-                            img_sequences = p_sample_loop(m, shape=(4, 3, img_height, img_width))
+                            img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
                         for i,img in enumerate(img_sequences[-1]):
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img = img.clamp(-1,1)
                             img = denormalize_img(img)
-                            if c.REVERSE_DIFFUSION_SAMPLER != 'karras':
-                                img = torch.from_numpy(img)
                             save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}.png'), nrow = 4//2)
-                
+                            if suffix == '':
+                                masked_img = (((masked_aug[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                person_img = (((person[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_masked.png'), masked_img)
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_person.png'), person_img)
+                        print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')               
                 tb.add_scalar('train loss', loss, batch_num)
                 
             # for name, param in model.named_parameters():

@@ -8,6 +8,7 @@ from tqdm import tqdm
 import numpy as np
 from functools import partial
 from utils import denormalize_img
+import sys
 
 
 def cosine_beta_schedule(timesteps, s=0.008):
@@ -84,6 +85,7 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     TODO: If using ddpm, note that it's unclear where/how to apply clamping/clipping, if requested.
     For now, use ddim with eta=1, if you want to simulate ddpm.
     '''
+    sys.exit('ddpm needs to be refactored to support conditional sampling')
     betas_t = extract(betas, t, x_t.shape)
     sqrt_one_minus_alphas_cumprod_t = extract(
         sqrt_one_minus_alphas_cumprod, t, x_t.shape
@@ -111,14 +113,20 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     
 
 @torch.no_grad()
-def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1):
+def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1):
   '''
   Predict x_t1 (x at timestep t-1) using DDIM.
   If eta=0, it's deterministic.
   If eta=1, it's DDPM.
   Values in between 0 and 1 are an interpolation between DDIM and DDPM.
   '''
-  model_output = model(x_t, t)
+  
+  clothing_aug, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
+  with torch.cuda.amp.autocast(dtype=torch.float16):
+    if cross_attns is None:
+        cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    x_t_and_masked_aug = torch.cat((x_t,masked_aug), dim=1)
+    model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
   
   alphas_cumprod_t = extract(
         alphas_cumprod, t, x_t.shape
@@ -144,11 +152,11 @@ def p_sample_ddim(model, x_t:np.ndarray, t:int, t_index, clip_model_output:bool=
 #   print(t_index, 'after', torch.min(x_0_hat).item(), torch.max(x_0_hat).item(), eta)
   x_t1 = alphas_cumprod_prev_t.sqrt() * x_0_hat + (betas_cumprod_prev_t - sigma**2).sqrt() * model_output + sigma * noise
   
-  return x_t1
+  return x_t1, cross_attns
 
 
 @torch.no_grad()
-def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None):
+def p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None):
     if sampler == 'ddpm':
         reverse_sampler_func = p_sample_ddpm
     elif sampler == 'ddim':
@@ -158,11 +166,12 @@ def p_sample_loop(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_
             reverse_sampler_func = p_sample_ddim
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
-    img = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
+    img_initially_noise = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
+    cross_attns = None
     imgs = []
     for timestep in tqdm(reversed(range(0, c.NUM_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_TIMESTEPS):
-        img = reverse_sampler_func(model, img, torch.full((batch_size,), timestep, device=c.DEVICE, dtype=torch.long), timestep, clip_model_output=clip_model_output)
-        imgs.append(img.cpu().numpy())
+        img_initially_noise, cross_attns = reverse_sampler_func(model_main, model_aux, inputs, img_initially_noise, cross_attns, torch.full((batch_size,), timestep, device=c.DEVICE, dtype=torch.long), timestep, clip_model_output=clip_model_output)
+        imgs.append(img_initially_noise)
     return imgs
 
 

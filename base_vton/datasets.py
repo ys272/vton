@@ -6,7 +6,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import random
-      
+import time
+
       
 class CustomDataset(Dataset):
     '''
@@ -50,8 +51,8 @@ def process_keypoints(keypoints):
     normalized_keypoints = []
     for keypoint in keypoints:
         if keypoint is None:
-            normalized_keypoints.append(-1)
-            normalized_keypoints.append(-1)
+            normalized_keypoints.append(0)
+            normalized_keypoints.append(0)
         else:
             normalized_keypoints.append(keypoint[0]/width)
             normalized_keypoints.append(keypoint[1]/height)
@@ -60,8 +61,10 @@ def process_keypoints(keypoints):
     normalized_keypoints = torch.tensor(normalized_keypoints, dtype=torch.float16)
     return normalized_keypoints
 
+start_time = time.time()
+print(f'Started loading data')
 
-size = 't'
+size = c.IMAGE_SIZE
 dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}')
 height = c.VTON_RESOLUTION[size][0]
 width = c.VTON_RESOLUTION[size][1]
@@ -86,8 +89,8 @@ for filename in filenames:
     sample = all_samples.setdefault(sample_original_string_id, [])
     sample.append((sample_data, sample_original_string_id, sample_unique_ordinal_id, sample_type))
 
-train_frac = 0.92
-val_frac = 0.04
+train_frac = 0.97
+val_frac = 0.01
 test_frac = 1 - train_frac - val_frac
 
 num_total_samples = len(os.listdir(dataset_dir)) / 4
@@ -127,7 +130,7 @@ for sample_original_string_id, sample in all_samples.items():
     
     
 print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}\n')
-print(f'% samples in train, val and test: {num_added_train_samples/num_total_samples}, {num_added_val_samples/num_total_samples}, {num_added_test_samples/num_total_samples}\n')
+print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}\n')
 
 
 train_dataset = CustomDataset(train_samples)
@@ -136,10 +139,11 @@ test_dataset = CustomDataset(test_samples)
 
 # Set batch size and other options as needed
 train_dataloader = DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=3, pin_memory=True)
-valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=False, num_workers=3, pin_memory=True)
+valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
 test_dataloader = DataLoader(test_dataset, batch_size=c.BATCH_SIZE, shuffle=False)
 
-
+end_time = time.time()
+print(f'Finished loading data: {end_time-start_time}')
 # for batch in train_dataloader:
 #     pass
 

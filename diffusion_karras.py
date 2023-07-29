@@ -35,16 +35,19 @@ def sigmas_karras(n, sigma_min=0.01, sigma_max=80., rho=7.):
     return torch.cat([sigmas, torch.tensor([0.])]).to(c.DEVICE)
 
 
-def denoise_karras(model, x, sig):
+def denoise_karras(model_main, x, sig, masked_aug, pose, noise_amount_masked, cross_attns):
     c_skip,c_out,c_in = scalings_karras(sig)
     t = torch.full((x.shape[0],), sig, device=c.DEVICE)
-    return model(x*c_in, t)*c_out + x*c_skip
+    x_t_and_masked_aug = torch.cat((x*c_in, masked_aug), dim=1)
+    with torch.cuda.amp.autocast(dtype=torch.float16):
+        model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns)*c_out + x*c_skip
+    return model_output
 
 
 @torch.no_grad()
-def sample_euler_karras(x, sigs, i, model):
+def sample_euler_karras(x, sigs, i, model_main, masked_aug, pose, noise_amount_masked, cross_attns):
     sig,sig2 = sigs[i],sigs[i+1]
-    denoised = denoise_karras(model, x, sig)
+    denoised = denoise_karras(model_main, x, sig, masked_aug, pose, noise_amount_masked, cross_attns)
     return x + (x-denoised)/sig*(sig2-sig)
 
 
@@ -94,12 +97,15 @@ def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=80.):
     return preds
 
 
-def p_sample_loop_karras(sampler, model, num_samples=4, steps=100, sigma_max=80., **kwargs):
+def p_sample_loop_karras(sampler, model_main, model_aux, inputs, num_samples=4, steps=100, sigma_max=80., **kwargs):
     preds = []
-    x = torch.randn((num_samples,1,28,28)).to(c.DEVICE)*sigma_max
+    x = torch.randn((num_samples,inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3])).to(c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
+    clothing_aug, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
+    with torch.cuda.amp.autocast(dtype=torch.float16):
+        cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
     for i in tqdm(range(len(sigs)-1)):
-        x = sampler(x, sigs, i, model, **kwargs)
+        x = sampler(x, sigs, i, model_main, masked_aug, pose, noise_amount_masked, cross_attns, **kwargs)
         preds.append(x)
     return preds
   

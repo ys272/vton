@@ -316,15 +316,15 @@ def create_final_dataset_vton_size_to_size(size='s'):
             _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
-        if num_training_samples > 100:
-          return
+        # if num_training_samples > 100:
+        #   return
       
       print(f'finished {data_source_dir_name}, processed {num_training_samples - num_training_samples_before_this_data_source} samples') 
   print(f'FINISHED, total of {num_training_samples} samples')      
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['s']:#,'s']:
+for size in ['t','s']:#,'s']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

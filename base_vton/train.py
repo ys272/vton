@@ -35,14 +35,15 @@ if __name__ == '__main__':
     
     img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
-    level_dims_main = (96, 160, 288, 460)
+    init_dim = 32
+    level_dims_main = (96, 160, 288, 480)
     level_dims_aux = (64, 96, 128, 192)
     level_attentions = (False, False, True)
     level_repetitions_main = (3,4,5,6)
     level_repetitions_aux = (3,4,4,4)
     
-    model_main = Unet_Person_Masked(channels=6, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
-    model_aux = Unet_Clothing(channels=3, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+    model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+    model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     # call_sampler_simple(model, (50, 3, image_size, image_size), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
     # call_sampler_simple_karras(model, 50, sampler='euler_ancestral', steps=250, sigma_max=80.0, clip_model_output=True, show_all=False)
     
-    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
+    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
     person = person.to(c.DEVICE)
     grid = torchvision.utils.make_grid(person)
     tb.add_image('images', grid)
@@ -123,7 +124,7 @@ if __name__ == '__main__':
                 #         g['lr'] = learning_rates[mini_batch_counter]
                 optimizer.zero_grad(set_to_none=True)
                 batch_num += 1
-                clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing, noise_amount_masked = batch
+                clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
 
                 # show_example_noise_sequence(batch[:5].squeeze(1))
@@ -149,8 +150,8 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                if batch_num % 500 == 0 or batch_num % 1001 == 0:
-                    print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                if batch_num % 500 == 0 or (batch_num-1) % 1000 == 0:
+                    print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
                 ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
@@ -162,21 +163,21 @@ if __name__ == '__main__':
                         for g in optimizer.param_groups:
                             g['lr'] /= math.sqrt(10) # divide learning rate by sqrt(10)
                         trainer_helper.update_last_learning_rate_reduction(batch_num)
-                        lr_reduction_msg = f'LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
+                        lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
                         print(lr_reduction_msg)
                         log_file.write(lr_reduction_msg)
                 elif num_batches_since_min_loss == 0:
-                    loss_decrease_msg = f'LOSS DECREASED, at batch num: {batch_num}\n'
+                    loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
                     print(loss_decrease_msg)
                     log_file.write(loss_decrease_msg)
 
                 # Save generated images.
                 if batch_num != 0 and batch_num % 1000 == 0:
-                    num_eval_samples = 4
                     # sample one random batch
                     random_samples = random.sample(list(iter(valid_dataloader)), 1)
-                    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
-                    inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_ordinal_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
+                    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
+                    num_eval_samples = min(4, clothing_aug.shape[0])
+                    inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
 
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
                         if suffix == '_ema' and batch_num < ema_batch_num_start:
@@ -189,13 +190,13 @@ if __name__ == '__main__':
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img = img.clamp(-1,1)
                             img = denormalize_img(img)
-                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}.png'), nrow = 4//2)
+                            full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
+                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}.png'), nrow = 4//2)
                             if suffix == '':
                                 masked_img = (((masked_aug[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 person_img = (((person[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_masked.png'), masked_img)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_person.png'), person_img)
-                        print(f'Loss for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')               
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)
                 tb.add_scalar('train loss', loss, batch_num)
                 
             # for name, param in model.named_parameters():

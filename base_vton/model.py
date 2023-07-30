@@ -1,5 +1,6 @@
 import copy
 import math
+import matplotlib.pyplot as plt
 from inspect import isfunction
 from functools import partial
 from tqdm.auto import tqdm
@@ -15,12 +16,13 @@ from nn_utils import *
 class Unet_Person_Masked(nn.Module):
     def __init__(
         self,
-        init_dim=16,
+        init_dim=32,
         level_dims=(32, 48, 64),
         level_dims_cross_attn=(32, 48, 64),
         level_attentions=(False, True),
         level_repetitions = (2,3,4),
         channels=3,
+        pose_dim=34,
     ):
         super().__init__()
         
@@ -28,22 +30,41 @@ class Unet_Person_Masked(nn.Module):
         self.level_dims = level_dims
         self.level_repetitions = level_repetitions
                 
-        # time embeddings
-        time_dim = init_dim * 4
+        # film embeddings
+        individual_film_dim = init_dim
+        combined_film_dim = 3 * individual_film_dim
         
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(init_dim),
-            nn.Linear(init_dim, time_dim),
-            nn.GELU(),
-            nn.Linear(time_dim, time_dim),
+            nn.Linear(init_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
         )
-        self.masked_person_pose_mlp = None
-        self.masked_person_aug_mlp = None
-        self.combined_embedding_masked_person = None
+        self.masked_person_pose_mlp = nn.Sequential(
+            nn.Linear(pose_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+        )
+        self.masked_person_aug_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(init_dim),
+            nn.Linear(init_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+        )
         
-        self.masked_person_pose_mlp = None
-        self.clothing_aug_mlp = None
-        self.combined_embedding_clothing = None
+        self.combined_embedding_masked_person = nn.Sequential(
+            nn.Linear(combined_film_dim, combined_film_dim),
+            nn.SiLU(),
+            nn.Linear(combined_film_dim, combined_film_dim),
+            nn.SiLU(),
+            nn.Linear(combined_film_dim, combined_film_dim),
+        )
         
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
@@ -62,7 +83,7 @@ class Unet_Person_Masked(nn.Module):
             level_reps = level_repetitions[level_idx]
             layers = []
             for rep in range(level_reps):
-                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, time_emb_dim=time_dim))
+                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
@@ -76,7 +97,7 @@ class Unet_Person_Masked(nn.Module):
         level_reps = level_repetitions[-1]
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out, dim_out, time_emb_dim=time_dim))
+            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
         self.mid1 = nn.ModuleList(layers)
@@ -84,7 +105,7 @@ class Unet_Person_Masked(nn.Module):
         # Second half
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, time_emb_dim=time_dim))
+            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
         self.mid2 = nn.ModuleList(layers)
@@ -99,7 +120,7 @@ class Unet_Person_Masked(nn.Module):
             layers = []
             layers.append(Upsample(dim_in, dim_in))
             for rep in range(level_reps):
-                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, time_emb_dim=time_dim))
+                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
@@ -111,10 +132,14 @@ class Unet_Person_Masked(nn.Module):
 
 
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
-
         x = self.init_conv(masked_aug)
         # r = x.clone()
-        t = self.time_mlp(t)
+        time_vector = self.time_mlp(t)
+        pose_vector = self.masked_person_pose_mlp(pose)
+        # noise_amount_masked = torch.round(noise_amount_masked*1000).int()
+        noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
+        film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))
+        # plt.imshow(film_vector.detach().cpu().numpy(), cmap='gray');plt.show()
         
         cross_attn_16 = cross_attns[0]
         cross_attn_32 = cross_attns[1]
@@ -128,14 +153,14 @@ class Unet_Person_Masked(nn.Module):
                     res_block = self.downs[level_idx][layer_idx]
                     self_attention = self.downs[level_idx][layer_idx+1]
                     cross_attention = self.downs[level_idx][layer_idx+2]
-                    x = res_block(x, t)
+                    x = res_block(x, film_vector)
                     h.append(x)
                     x = self_attention(x)
                     x = cross_attention(x, cross_attn_32)
             else:
                 for layer_idx in range(0, len(self.downs[level_idx])-1):
                     res_block = self.downs[level_idx][layer_idx]
-                    x = res_block(x, t)
+                    x = res_block(x, film_vector)
                     h.append(x)
             downsample = self.downs[level_idx][-1]
             x = downsample(x)
@@ -145,7 +170,7 @@ class Unet_Person_Masked(nn.Module):
             res_block = self.mid1[mid_layer_idx]
             self_attention = self.mid1[mid_layer_idx+1]
             cross_attention = self.mid1[mid_layer_idx+2]
-            x = res_block(x, t)
+            x = res_block(x, film_vector)
             x = self_attention(x)
             x = cross_attention(x, cross_attn_16)
             if mid_layer_idx != len(self.mid1) - 2:
@@ -157,7 +182,7 @@ class Unet_Person_Masked(nn.Module):
             cross_attention = self.mid2[mid_layer_idx+2]
             if mid_layer_idx != 0:
                 x = torch.cat((x, h_middle.pop()), dim=1)
-            x = res_block(x, t)
+            x = res_block(x, film_vector)
             x = self_attention(x)
             x = cross_attention(x, cross_attn_16)
                 
@@ -171,14 +196,14 @@ class Unet_Person_Masked(nn.Module):
                     self_attention = self.ups[level_idx][layer_idx+1]
                     cross_attention = self.ups[level_idx][layer_idx+2]
                     x = torch.cat((x, h.pop()), dim=1)
-                    x = res_block(x, t)
+                    x = res_block(x, film_vector)
                     x = self_attention(x)
                     x = cross_attention(x, cross_attn_32)
             else:
                 for layer_idx in range(1, len(self.ups[level_idx])):
                     res_block = self.ups[level_idx][layer_idx]
                     x = torch.cat((x, h.pop()), dim=1)
-                    x = res_block(x, t)
+                    x = res_block(x, film_vector)
 
         # x = torch.cat((x, r), dim=1)
         # x = self.final_res_block(x, t)
@@ -193,19 +218,39 @@ class Unet_Clothing(nn.Module):
         level_dims=(32, 48, 64),
         level_repetitions = (2,3,4),
         channels=3,
+        pose_dim=34
     ):
         super().__init__()
         
         self.level_dims = level_dims
         self.level_repetitions = level_repetitions
-                
-        self.masked_person_pose_mlp = None
-        self.masked_person_aug_mlp = None
-        self.combined_embedding_masked_person = None
         
-        self.masked_person_pose_mlp = None
-        self.clothing_aug_mlp = None
-        self.combined_embedding_clothing = None
+        # film embeddings
+        individual_film_dim = init_dim
+        combined_film_dim = 2 * individual_film_dim       
+        
+        self.masked_person_pose_mlp = nn.Sequential(
+            nn.Linear(pose_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+        )
+        self.clothing_aug_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(init_dim),
+            nn.Linear(init_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+        )
+        self.combined_embedding_clothing = nn.Sequential(
+            nn.Linear(combined_film_dim, combined_film_dim),
+            nn.SiLU(),
+            nn.Linear(combined_film_dim, combined_film_dim),
+            nn.SiLU(),
+            nn.Linear(combined_film_dim, combined_film_dim),
+        )
         
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
@@ -257,6 +302,10 @@ class Unet_Clothing(nn.Module):
 
         x = self.init_conv(clothing_aug)
         # r = x.clone()
+        pose_vector = self.masked_person_pose_mlp(pose)
+        # noise_amount_clothing = torch.round(noise_amount_clothing*1000).int()
+        noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
+        film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, noise_vector), dim=1))
 
         h = []
         
@@ -265,7 +314,7 @@ class Unet_Clothing(nn.Module):
         for level_idx in range(len(self.downs)):
             for layer_idx in range(0, len(self.downs[level_idx])-1):
                 res_block = self.downs[level_idx][layer_idx]
-                x = res_block(x)
+                x = res_block(x, film_vector)
                 if level_idx == len(self.downs) - 1:
                     h.append(x)
             downsample = self.downs[level_idx][-1]
@@ -275,7 +324,7 @@ class Unet_Clothing(nn.Module):
         h_middle_idx = 0
         for mid_layer_idx in range(len(self.mid1)):
             res_block = self.mid1[mid_layer_idx]
-            x = res_block(x)
+            x = res_block(x, film_vector)
             if mid_layer_idx != len(self.mid1) - 1:
                 h_middle.append(x)
                         
@@ -284,7 +333,7 @@ class Unet_Clothing(nn.Module):
             if mid_layer_idx != 0:
                 x = torch.cat((x, h_middle[h_middle_idx]), dim=1)
                 h_middle_idx += 1
-            x = res_block(x)
+            x = res_block(x, film_vector)
             # h_middle.append(x)
                 
         cross_attns.append(x)
@@ -297,7 +346,7 @@ class Unet_Clothing(nn.Module):
                 res_block = self.ups[level_idx][layer_idx]
                 x = torch.cat((x, h[h_idx]), dim=1)
                 h_idx -=1
-                x = res_block(x)
+                x = res_block(x, film_vector)
                 # h.append(x)
         
         cross_attns.append(x)

@@ -78,31 +78,7 @@ def diff_training_sample_ids_btwn_dirs(dir1, dir2):
 base_dir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/schp_raw_output/densepose/'
 base_dir2 = '/home/yoni/Desktop/processed_data_vton/same_person_two_poses/person_original/m/'
 # diff_training_sample_ids_btwn_dirs(base_dir, base_dir2)    
-
-
-def improve_contrast_if_very_light(clothing_img, person_original_img):
-    is_very_light_clothing = np.mean(clothing_img[clothing_img.shape[0]//2-10:clothing_img.shape[0]//2+10, clothing_img.shape[1]//2-10:clothing_img.shape[1]//2+10]) > 200
-    if is_very_light_clothing:
-        # Random contrast adjustment
-        beta = -5 #uniform(-10,-20)
-        # Random contrast multiplier
-        alpha = 1 #uniform(0.75, 1.1)
-        
-        clothing_img = cv2.convertScaleAbs(clothing_img, alpha=alpha, beta=beta)
-        person_original_img = cv2.convertScaleAbs(person_original_img, alpha=alpha, beta=beta)
-    return clothing_img, person_original_img
     
-
-def improve_contrast_process(clothing_dir, person_original_dir):
-    for filename in tqdm(os.listdir(clothing_dir)):
-        clothing_img_path = os.path.join(clothing_dir, filename)
-        person_original_img_path = os.path.join(person_original_dir, filename)
-        clothing_img = cv2.imread(clothing_img_path)
-        person_original_img = cv2.imread(person_original_img_path)
-        clothing_img, person_original_img = improve_contrast_if_very_light(clothing_img, person_original_img)
-        cv2.imwrite(clothing_img_path, clothing_img)
-        cv2.imwrite(person_original_img_path, person_original_img)
-        
 
 def downsample_mask_arr(arr):
   '''
@@ -232,10 +208,11 @@ def create_final_dataset_vton_size_to_size(size='s'):
       person_with_masked_clothing_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'person_with_masked_clothing', size)
       mask_coordinates_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'mask_coordinates', size)
       
-      def _normalize_and_save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
+      def _normalize_and_save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, mask_coordinates_arr:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
         person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person.pth')
         clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.pth')
         person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_masked.pth')
+        mask_coordinates_filepath_final = os.path.join(target_dir, training_sample_id_final + '_mask-coords.pth')
         pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
         # Normalize to [-1,1].
         person_original_img_norm = (person_original_img / 127.5) - 1
@@ -252,7 +229,7 @@ def create_final_dataset_vton_size_to_size(size='s'):
         torch.save(torch.tensor(person_original_img_norm), person_original_filepath_final)
         torch.save(torch.tensor(clothing_img_norm), clothing_filepath_final)
         torch.save(torch.tensor(person_with_masked_clothing_img_norm), person_with_masked_clothing_filepath_final)
-        
+        torch.save(torch.tensor(mask_coordinates_arr).bool(), mask_coordinates_filepath_final)
         
         with open(pose_keypoints_filepath_final, 'w') as pose_keypoints_file:
           pose_keypoints_file.write(str(pose_keypoints_list))
@@ -295,25 +272,24 @@ def create_final_dataset_vton_size_to_size(size='s'):
         with open(pose_keypoints_filepath, 'r') as pose_keypoints_file:
           pose_keypoints_list = eval(pose_keypoints_file.readlines()[0])
         training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_orig'
-        _normalize_and_save_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, pose_keypoints_list, training_sample_id_final, inspect)
+        mask_coordinates_arr = np.load(mask_coordinates_filepath).astype(np.uint8)
+        _normalize_and_save_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, mask_coordinates_arr, pose_keypoints_list, training_sample_id_final, inspect)
         num_training_samples += 1
                 
         num_augmentations = prob_aug[data_source_dir_name]
         if num_augmentations >= 1:
-          mask_coordinates_arr = np.load(mask_coordinates_filepath).astype(np.uint8)
           for _ in range(num_augmentations):
             augmented_sample = create_augmented_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, mask_coordinates_arr, pose_keypoints_list)
             person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug = augmented_sample
             training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_aug'
-            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
+            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, mask_coordinates_arr, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
         elif num_augmentations >= 0:
-          mask_coordinates_arr = np.load(mask_coordinates_filepath).astype(np.uint8)
           if random() < num_augmentations:
             augmented_sample = create_augmented_training_sample(person_original_img, clothing_img, person_with_masked_clothing_img, mask_coordinates_arr, pose_keypoints_list)
             person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug = augmented_sample
             training_sample_id_final = training_sample_id_original + f'_{num_training_samples}_aug'
-            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, pose_keypoints_list_aug, training_sample_id_final, inspect)
+            _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, mask_coordinates_arr, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
         # if num_training_samples > 100:
@@ -324,7 +300,7 @@ def create_final_dataset_vton_size_to_size(size='s'):
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['t','s']:#,'s']:
+for size in ['s']:#,'s']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

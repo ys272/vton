@@ -9,7 +9,6 @@ from random import random
 import multiprocessing
 import pickle
 from tqdm import tqdm
-from data_processing_utils import improve_contrast_process
 
 
 data_source_acronym = 'pairedhigh'

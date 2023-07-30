@@ -33,17 +33,16 @@ class SinusoidalPositionEmbeddings(nn.Module):
         self.dim = dim
 
     def forward(self, time):
-        device = time.device
         half_dim = self.dim // 2
         max_period =c.NUM_TIMESTEPS
         embeddings = math.log(max_period) / (half_dim -1)
-        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
+        embeddings = torch.exp(torch.arange(half_dim, device=c.DEVICE) * -embeddings)
         embeddings = time[:, None] * embeddings[None, :]
         embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         return embeddings
 
-# a=SinusoidalPositionEmbeddings(16)
-# aa=a.forward(torch.arange(0, 256).long())
+# a=SinusoidalPositionEmbeddings(32)
+# aa=a.forward(torch.arange(0, 1000).long())
 # plt.imshow(aa.T, cmap='gray')
 # plt.show(block=True)
 
@@ -105,50 +104,53 @@ class WeightStandardizedConv2d(nn.Conv2d):
 
 
 class Block(nn.Module):
-    def __init__(self, dim, dim_out, groups=4):
+    def __init__(self, dim, dim_out):
         super().__init__()
-        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
-        self.norm = nn.GroupNorm(groups, dim_out)
+        groups = min(32, dim//4)
+        self.norm = nn.GroupNorm(groups, dim)
         self.act = nn.SiLU()
+        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
    
     def forward(self, x, scale_shift=None):
-        x = self.proj(x)
         x = self.norm(x)
-
         if scale_shift is not None:
             scale, shift = scale_shift
             # TODO: Experiment if removing the +1 makes a meaningful difference.
             x = x * (scale + 1) + shift        
 
         x = self.act(x)
+        
+        x = self.proj(x)
         return x
     
     
 class BlockClothing(nn.Module):
-    def __init__(self, dim, dim_out, groups=4):
+    def __init__(self, dim, dim_out):
         super().__init__()
+        groups = min(32, dim//4)
+        self.norm = nn.GroupNorm(groups, dim)
+        self.act = nn.SiLU()
         dilation_rate = 2
         kernel_size = 7
-        out_channels_dilated = 5
+        # 1/10th of the channels will be dilated convolutions.
+        out_channels_dilated = dim_out//10
         padding = dilation_rate * (kernel_size - 1) // 2
         self.proj_dilated = WeightStandardizedConv2d(dim, out_channels_dilated, kernel_size, padding=padding, dilation=dilation_rate)
-        
         self.proj_dense = WeightStandardizedConv2d(dim, dim_out - out_channels_dilated, 3, padding=1)
-        self.norm = nn.GroupNorm(groups, dim_out)
-        self.act = nn.SiLU()
    
     def forward(self, x, scale_shift=None):
-        x_dense = self.proj_dense(x)
-        x_dilated = self.proj_dilated(x)
-        x = torch.cat((x_dense,x_dilated), dim=1)
         x = self.norm(x)
-
         if scale_shift is not None:
             scale, shift = scale_shift
             # TODO: Experiment if removing the +1 makes a meaningful difference.
             x = x * (scale + 1) + shift        
 
         x = self.act(x)
+        
+        x_dense = self.proj_dense(x)
+        x_dilated = self.proj_dilated(x)
+        x = torch.cat((x_dense,x_dilated), dim=1)
+        
         return x
 
 
@@ -161,18 +163,18 @@ group normalization (see (Kolesnikov et al., 2019) for details).
 '''
 
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=4, clothing=False):
+    def __init__(self, dim, dim_out, *, film_emb_dim=None, clothing=False):
         super().__init__()
         self.mlp = (
-            nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2))
-            if time_emb_dim is not None
+            nn.Sequential(nn.SiLU(), nn.Linear(film_emb_dim, dim * 2))
+            if film_emb_dim is not None
             else None
         )
         if not clothing:
-            self.block1 = Block(dim, dim_out, groups=groups)
+            self.block1 = Block(dim, dim_out)
         else:
-            self.block1 = BlockClothing(dim, dim_out, groups=groups)
-        self.block2 = Block(dim_out, dim_out, groups=groups)
+            self.block1 = BlockClothing(dim, dim_out)
+        self.block2 = Block(dim_out, dim_out)
         self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb=None):

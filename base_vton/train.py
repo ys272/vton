@@ -54,13 +54,19 @@ if __name__ == '__main__':
     
     initial_learning_rate = 1e-4
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
+    scaler = torch.cuda.amp.GradScaler()
     batch_num = 0
 
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '24-July_karras.pth'))
-        model_main.load_state_dict(model_state['model_state_dict'])
+    if True:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-22:06.pth'))
+        model_main.load_state_dict(model_state['model_main_state_dict'])
+        model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
+        scaler.load_state_dict(model_state['scaler_state_dict'])
+        model_main = model_main.half()
+        model_aux = model_aux.half()
+        
         batch_num = model_state['batch_num']
         initial_learning_rate = model_state['learning_rate']
         for g in optimizer.param_groups:
@@ -94,7 +100,6 @@ if __name__ == '__main__':
     # tb.add_graph(model_aux, input_tuple_aux)
     
     epochs = 1000
-    scaler = torch.cuda.amp.GradScaler()
     ema_batch_num_start = 50000
     ema = EMA(0.995, ema_batch_num_start)
     ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
@@ -158,7 +163,7 @@ if __name__ == '__main__':
                 
                 ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, batch_num, save_from_this_batch_num=1000)
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)
                 if num_batches_since_min_loss > 10000:
                     if num_batches_since_min_loss > 25000:
                         sys.exit('Loss has not improved for 25,000 batches. Terminating the flow.')
@@ -177,8 +182,9 @@ if __name__ == '__main__':
                 # Save generated images.
                 if batch_num != 0 and batch_num % 1000 == 0:
                     # sample one random batch
-                    random_samples = random.sample(list(iter(valid_dataloader)), 1)
-                    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
+                    # random_samples = random.sample(list(iter(valid_dataloader)), 1)
+                    # clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
+                    clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(valid_dataloader))
                     num_eval_samples = min(4, clothing_aug.shape[0])
                     inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
                     val_loss = 0

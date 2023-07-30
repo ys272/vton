@@ -361,7 +361,7 @@ class TrainerHelper:
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
     
-    def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, batch_num, save_from_this_batch_num=0):
+    def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=0):
         if loss < self.min_loss:
             self.min_loss = loss
             self.min_loss_batch_num = batch_num
@@ -372,6 +372,7 @@ class TrainerHelper:
                     'model_main_state_dict': model_main.state_dict(),
                     'model_aux_state_dict': model_aux.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scaler_state_dict': scaler.state_dict(),
                     'loss': loss,
                     'learning_rate': optimizer.param_groups[0]['lr'],
                 }, save_path)

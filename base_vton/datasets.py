@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import random
 import time
+from tqdm import tqdm
 
       
 class CustomDataset(Dataset):
@@ -76,7 +77,6 @@ dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}')
 height = c.VTON_RESOLUTION[size][0]
 width = c.VTON_RESOLUTION[size][1]
 
-
 all_samples = {}
 
 filenames = os.listdir(dataset_dir)
@@ -91,7 +91,7 @@ For each filename, we save metadata allowing us to:
    belonging to the original and augmented (if it exists) copy/ies of an image.
 2. Determine the original locations of the files later on.
 '''
-for filename in filenames:
+for filename in tqdm(filenames):
     # e.g 'misconline_72_332', shared between orig and aug, if aug exists
     sample_original_string_id = '_'.join(filename.split('_')[:3])
     # e.g '1_aug'.  unique for every sample.
@@ -125,7 +125,7 @@ test_samples = []
 num_added_train_samples = 0
 num_added_val_samples = 0
 num_added_test_samples = 0
-for sample_original_string_id, sample in all_samples.items():
+for sample_original_string_id, sample in tqdm(all_samples.items()):
     num_samples = len(sample) / num_files_per_sample
     # sort by the unique ordinal id (x[2]) of each sample. This will separate the original and augmented
     # file versions. Then, the different files belonging to each (original or augmented) sample
@@ -155,7 +155,6 @@ for sample_original_string_id, sample in all_samples.items():
 print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}\n')
 print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}\n')
 
-
 train_dataset = CustomDataset(train_samples)
 valid_dataset = CustomDataset(val_samples)
 test_dataset = CustomDataset(test_samples)
@@ -167,6 +166,7 @@ test_dataloader = DataLoader(test_dataset, batch_size=c.BATCH_SIZE, shuffle=Fals
 
 end_time = time.time()
 print(f'Finished loading data: {end_time-start_time}')
+
 # for batch in train_dataloader:
 #     pass
 

@@ -136,7 +136,6 @@ class Unet_Person_Masked(nn.Module):
         # r = x.clone()
         time_vector = self.time_mlp(t)
         pose_vector = self.masked_person_pose_mlp(pose)
-        # noise_amount_masked = torch.round(noise_amount_masked*1000).int()
         noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
         film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))
         # plt.imshow(film_vector.detach().cpu().numpy(), cmap='gray');plt.show()
@@ -303,7 +302,6 @@ class Unet_Clothing(nn.Module):
         x = self.init_conv(clothing_aug)
         # r = x.clone()
         pose_vector = self.masked_person_pose_mlp(pose)
-        # noise_amount_clothing = torch.round(noise_amount_clothing*1000).int()
         noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
         film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, noise_vector), dim=1))
 

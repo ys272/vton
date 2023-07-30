@@ -47,9 +47,11 @@ if __name__ == '__main__':
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    # initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
+    
+    # initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
     # final_learning_rate = 1e-4
-    # learning_rates = np.linspace(1e-8, 1e-4, num=10000)
+    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
+    
     initial_learning_rate = 1e-4
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     batch_num = 0
@@ -112,16 +114,17 @@ if __name__ == '__main__':
         for epoch in range(epochs):
             for step, batch in enumerate(train_dataloader):
                 # Code for finding maximum learning rate.
-                # if mini_batch_counter%100==0 and mini_batch_counter != 0 and initial_learning_rate < 0.01:
+                # if batch_num%75==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = initial_learning_rate
-                #     print(f'mini_batch_counter {mini_batch_counter} lr: {initial_learning_rate}')
+                #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                # if mini_batch_counter < 10000:
+                # if batch_num < 10000:
                 #     for g in optimizer.param_groups:
-                #         g['lr'] = learning_rates[mini_batch_counter]
+                #         g['lr'] = learning_rates[batch_num]
+                        
                 optimizer.zero_grad(set_to_none=True)
                 batch_num += 1
                 clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
@@ -178,7 +181,7 @@ if __name__ == '__main__':
                     clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
                     num_eval_samples = min(4, clothing_aug.shape[0])
                     inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
-
+                    val_loss = 0
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
                         if suffix == '_ema' and batch_num < ema_batch_num_start:
                                 continue
@@ -189,14 +192,19 @@ if __name__ == '__main__':
                         for i,img in enumerate(img_sequences[-1]):
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img = img.clamp(-1,1)
+                            val_loss += F.l1_loss(img.cpu(), person[i]).item()
                             img = denormalize_img(img)
                             full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
                             save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}.png'), nrow = 4//2)
                             if suffix == '':
-                                masked_img = (((masked_aug[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                person_img = (((person[i].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                masked_img = (((masked_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                person_img = (((person[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                clothing_img = (((clothing_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_clothing.png'), clothing_img)
+                    val_loss /= num_eval_samples
+                    tb.add_scalar('val loss', val_loss, batch_num)
                 tb.add_scalar('train loss', loss, batch_num)
                 
             # for name, param in model.named_parameters():

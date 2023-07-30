@@ -59,13 +59,15 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if True:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-22:06.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-22:41.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         scaler.load_state_dict(model_state['scaler_state_dict'])
-        model_main = model_main.half()
-        model_aux = model_aux.half()
+        # model_main = model_main.half()
+        # model_aux = model_aux.half()
+        # model_main = model_main.float()
+        # model_aux = model_aux.float()
         
         batch_num = model_state['batch_num']
         initial_learning_rate = model_state['learning_rate']
@@ -129,8 +131,6 @@ if __name__ == '__main__':
                 # if batch_num < 10000:
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[batch_num]
-                        
-                optimizer.zero_grad(set_to_none=True)
                 batch_num += 1
                 clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
@@ -149,9 +149,11 @@ if __name__ == '__main__':
                 # TODO: This still needs to be analyzed for correctness.
                 with torch.cuda.amp.autocast(dtype=torch.float16):
                     loss = p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
+                
                 scaler.scale(loss).backward() # loss.backward()
                 scaler.step(optimizer) # optimizer.step()
                 scaler.update()
+                optimizer.zero_grad(set_to_none=True)
                 
                 batch_training_end_time_prev = batch_training_end_time
                 batch_training_end_time = time.time()
@@ -163,7 +165,7 @@ if __name__ == '__main__':
                 
                 ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1)
                 if num_batches_since_min_loss > 10000:
                     if num_batches_since_min_loss > 25000:
                         sys.exit('Loss has not improved for 25,000 batches. Terminating the flow.')

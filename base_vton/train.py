@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-22:48.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-vton_w_norm.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -165,21 +165,23 @@ if __name__ == '__main__':
                 
                 ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)                
                 if num_batches_since_min_loss > 10000:
                     if num_batches_since_min_loss > 25000:
-                        sys.exit('Loss has not improved for 25,000 batches. Terminating the flow.')
+                        termination_msg = 'Loss has not improved for 25,000 batches. Terminating the flow.'
+                        log_file.write(termination_msg+'\n')
+                        sys.exit(termination_msg)
                     if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
                         for g in optimizer.param_groups:
                             g['lr'] /= math.sqrt(10) # divide learning rate by sqrt(10)
                         trainer_helper.update_last_learning_rate_reduction(batch_num)
                         lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
                         print(lr_reduction_msg)
-                        log_file.write(lr_reduction_msg)
+                        log_file.write(lr_reduction_msg+'\n')
                 elif num_batches_since_min_loss == 0:
                     loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
                     print(loss_decrease_msg)
-                    log_file.write(loss_decrease_msg)
+                    log_file.write(loss_decrease_msg+'\n')
 
                 # Save generated images.
                 if batch_num != 0 and batch_num % 1000 == 0:
@@ -203,7 +205,7 @@ if __name__ == '__main__':
                             val_loss += F.l1_loss(img.cpu(), person[i]).item()
                             img = denormalize_img(img)
                             full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
-                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}.png'), nrow = 4//2)
+                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-PRED.png'), nrow = 4//2)
                             if suffix == '':
                                 masked_img = (((masked_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 person_img = (((person[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)

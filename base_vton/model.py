@@ -86,7 +86,7 @@ class Unet_Person_Masked(nn.Module):
                 layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
+                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=False)))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
@@ -99,7 +99,7 @@ class Unet_Person_Masked(nn.Module):
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
+            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=False)))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half
@@ -107,7 +107,7 @@ class Unet_Person_Masked(nn.Module):
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
+            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=False)))
         self.mid2 = nn.ModuleList(layers)
 
         # Up level
@@ -123,17 +123,17 @@ class Unet_Person_Masked(nn.Module):
                 layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn), dim_out, dim_out_cross_attn)))
+                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=False)))
             self.ups.append(nn.ModuleList(layers))
 
-        self.out_dim = 3
-        # self.final_res_block = ResnetBlock(dim * 2, dim, time_emb_dim=time_dim)
-        self.final_conv = nn.Conv2d(level_dims[0], self.out_dim, 3, padding=1)
+        # self.final_res_block = ResnetBlock(level_dims[0]+init_dim, level_dims[0], film_emb_dim=combined_film_dim)
+        self.final_conv = nn.Conv2d(level_dims[0], 3, 3, padding=1)
 
 
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
         # r = x.clone()
+        
         time_vector = self.time_mlp(t)
         pose_vector = self.masked_person_pose_mlp(pose)
         noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
@@ -205,7 +205,7 @@ class Unet_Person_Masked(nn.Module):
                     x = res_block(x, film_vector)
 
         # x = torch.cat((x, r), dim=1)
-        # x = self.final_res_block(x, t)
+        # x = self.final_res_block(x, film_vector)
         
         return self.final_conv(x)
 

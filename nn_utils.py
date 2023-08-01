@@ -298,7 +298,7 @@ TODO: Note that there's been a debate about whether to apply normalization
 before or after attention in Transformers.
 '''
 class PreNorm(nn.Module):
-    def __init__(self, fn, dim_x, dim_y=None):
+    def __init__(self, fn, dim_x, dim_y=None, affine=True):
         super().__init__()
         self.fn = fn
         # Since group size is 1, this is equivalent to layer normalization. 
@@ -306,9 +306,9 @@ class PreNorm(nn.Module):
         # unlike group normalization which is only across a subset of channels, where each subset contains 
         # a number of channels equal to num_channels / num_groups. In this function's case num_groups is 1, 
         # which as stated, makes the group normalization equivalent to layer normalization.
-        self.norm_x = nn.GroupNorm(1, dim_x)
+        self.norm_x = nn.GroupNorm(1, dim_x, affine=affine)
         if dim_y is not None:
-            self.norm_y = nn.GroupNorm(1, dim_y)
+            self.norm_y = nn.GroupNorm(1, dim_y, affine=affine)
 
     def forward(self, x, y=None):
         x = self.norm_x(x)
@@ -396,6 +396,7 @@ def p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, nois
         x_noisy = q_sample(person, t=t, noise=noise)
     
     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
         

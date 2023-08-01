@@ -125,6 +125,7 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   with torch.cuda.amp.autocast(dtype=torch.float16):
     if cross_attns is None:
         cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    # x_t_and_masked_aug = torch.cat((x_t,masked_aug,clothing_aug), dim=1)
     x_t_and_masked_aug = torch.cat((x_t,masked_aug), dim=1)
     model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
   

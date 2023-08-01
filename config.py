@@ -95,7 +95,9 @@ General
 '''
 
 DEVICE = 'cuda'
-BATCH_SIZE = 9
+BATCH_SIZE = 8
 RANDOM_SEED = 7
 IMAGE_SIZE = 's'
 OPTIMIZE = True
+RUN_EMA = False
+EVAL_FREQUENCY = 1000

@@ -35,8 +35,8 @@ if __name__ == '__main__':
     
     img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
-    init_dim = 32
-    level_dims_main = (96, 160, 288, 480)
+    init_dim = 64
+    level_dims_main = (128, 160, 320, 480)
     level_dims_aux = (64, 96, 128, 192)
     level_attentions = (False, False, True)
     level_repetitions_main = (3,4,5,6)
@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '30-July-vton_w_norm.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '31-July-concat_cloth.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -67,7 +67,6 @@ if __name__ == '__main__':
         
         batch_num = model_state['batch_num']
         initial_learning_rate = model_state['learning_rate']
-        
         del model_state
         torch.cuda.empty_cache()
         
@@ -149,7 +148,12 @@ if __name__ == '__main__':
                 # TODO: This still needs to be analyzed for correctness.
                 with torch.cuda.amp.autocast(dtype=torch.float16):
                     loss = p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
-                
+                    if loss == 0 or loss > 1e10:
+                        loss_oob_msg = f'----------------------------Loss is OOB: {loss}'
+                        print(loss_oob_msg)
+                        log_file.write(loss_oob_msg+'\n')
+                        
+                        
                 scaler.scale(loss).backward() # loss.backward()
                 scaler.step(optimizer) # optimizer.step()
                 scaler.update()
@@ -160,18 +164,19 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                if batch_num % 500 == 0 or (batch_num-1) % 1000 == 0:
-                    print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                if batch_num % 500 == 0 or (batch_num-1) % c.EVAL_FREQUENCY == 0:
+                    print(f'epoch {epoch}, batch {batch_num}, loss: {loss:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
-                ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
+                if c.RUN_EMA:
+                    ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
                 num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)                
-                if num_batches_since_min_loss > 10000:
-                    if num_batches_since_min_loss > 25000:
+                if num_batches_since_min_loss > 5000:
+                    if num_batches_since_min_loss > 15000:
                         termination_msg = 'Loss has not improved for 25,000 batches. Terminating the flow.'
                         log_file.write(termination_msg+'\n')
                         sys.exit(termination_msg)
-                    if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
+                    if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
                         for g in optimizer.param_groups:
                             g['lr'] /= math.sqrt(10) # divide learning rate by sqrt(10)
                         trainer_helper.update_last_learning_rate_reduction(batch_num)
@@ -184,7 +189,7 @@ if __name__ == '__main__':
                     log_file.write(loss_decrease_msg+'\n')
 
                 # Save generated images.
-                if batch_num != 0 and batch_num % 1000 == 0:
+                if batch_num != 0 and batch_num % c.EVAL_FREQUENCY == 0:
                     # sample one random batch
                     # random_samples = random.sample(list(iter(valid_dataloader)), 1)
                     # clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = random_samples[0]
@@ -193,7 +198,7 @@ if __name__ == '__main__':
                     inputs = [clothing_aug[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
                     val_loss = 0
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
-                        if suffix == '_ema' and batch_num < ema_batch_num_start:
+                        if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
                                 continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                             img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=250)

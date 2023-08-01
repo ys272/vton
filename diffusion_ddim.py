@@ -184,8 +184,8 @@ def show_example_noise_sequence(imgs):
 
             noised_img_save_path = os.path.join('/home/yoni/Desktop/f/other/debugging/noising_examples', f'{img_idx}_{t_idx}.png')
             noised_img = (noised_img.cpu().numpy() + 1) * 127.5
-            cv2.imwrite(noised_img_save_path, noised_img)
-        cv2.imwrite(f'/home/yoni/Desktop/f/other/debugging/noising_examples/{img_idx}_0_nonoise.png', ((img.cpu().numpy() + 1) * 127.5).astype(np.uint8))
+            cv2.imwrite(noised_img_save_path, noised_img[::-1].transpose(1,2,0))
+        cv2.imwrite(f'/home/yoni/Desktop/f/other/debugging/noising_examples/{img_idx}_0_nonoise.png', ((img.cpu().numpy() + 1) * 127.5).astype(np.uint8)[::-1].transpose(1,2,0))
 
 
 def call_sampler_simple(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None):

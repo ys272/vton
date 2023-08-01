@@ -395,6 +395,10 @@ def p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, nois
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
     
+    # import cv2
+    # x = (x_noisy.cpu().numpy() + 1) * 127.5
+    # cv2.imwrite('/home/yoni/Desktop/t.jpg', x[1][::-1].transpose(1,2,0))
+    
     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
     # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)

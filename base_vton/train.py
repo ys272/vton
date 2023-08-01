@@ -40,7 +40,7 @@ if __name__ == '__main__':
     level_dims_aux = (64, 96, 128, 192)
     level_attentions = (False, False, True)
     level_repetitions_main = (3,4,5,6)
-    level_repetitions_aux = (3,4,4,4)
+    level_repetitions_aux = (3,3,5,6)
     
     model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
@@ -48,11 +48,12 @@ if __name__ == '__main__':
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
     
-    # initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-4
+    initial_learning_rate = 1e-4
+    
+    # initial_learning_rate = 1e-7 # Use this when applying 1cycle policy.
+    # final_learning_rate = 1e-5
     # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
     
-    initial_learning_rate = 1e-4
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
     batch_num = 0
@@ -118,7 +119,7 @@ if __name__ == '__main__':
         training_start_time = time.time()
         batch_training_end_time = training_start_time
         for epoch in range(epochs):
-            for step, batch in enumerate(train_dataloader):
+            for batch in train_dataloader:
                 # Code for finding maximum learning rate.
                 # if batch_num%75==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
@@ -130,11 +131,11 @@ if __name__ == '__main__':
                 # if batch_num < 10000:
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[batch_num]
-                batch_num += 1
+                
                 clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
 
-                # show_example_noise_sequence(batch[:5].squeeze(1))
+                # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(batch[:5].squeeze(1), 100)
                 # Sample t uniformally for every example in the batch
                 batch_size = masked_aug.shape[0]
@@ -221,6 +222,7 @@ if __name__ == '__main__':
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 tb.add_scalar('train loss', loss, batch_num)
+                batch_num += 1
                 
             # for name, param in model.named_parameters():
             #     tb.add_histogram(name, param, epoch)

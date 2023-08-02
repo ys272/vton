@@ -430,7 +430,7 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     # x = (x_noisy.cpu().numpy() + 1) * 127.5
     # cv2.imwrite('/home/yoni/Desktop/t.jpg', x[1][::-1].transpose(1,2,0))
     
-    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
     # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)

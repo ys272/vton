@@ -123,8 +123,9 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   
   clothing_aug, mask_coords, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
   with torch.cuda.amp.autocast(dtype=torch.float16):
-    if cross_attns is None:
-        cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    # if cross_attns is None:
+    #     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
+    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
     # x_t_and_masked_aug = torch.cat((x_t,masked_aug,clothing_aug), dim=1)
     x_t_and_masked_aug = torch.cat((x_t,masked_aug), dim=1)
     model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
@@ -213,7 +214,3 @@ def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
-            # save_image(masked_img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), nrow = 4//2)
-            # save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), nrow = 4//2)
-            # save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), nrow = 4//2)
-

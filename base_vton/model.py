@@ -233,7 +233,7 @@ class Unet_Clothing(nn.Module):
         
         # film embeddings
         individual_film_dim = init_dim
-        combined_film_dim = individual_film_dim       
+        combined_film_dim = 2 * individual_film_dim       
         
         self.masked_person_pose_mlp = nn.Sequential(
             nn.Linear(pose_dim, individual_film_dim),
@@ -242,6 +242,16 @@ class Unet_Clothing(nn.Module):
             # nn.SiLU(),
             # nn.Linear(individual_film_dim, individual_film_dim),
         )
+        
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(init_dim),
+            nn.Linear(init_dim, individual_film_dim),
+            nn.SiLU(),
+            nn.Linear(individual_film_dim, individual_film_dim),
+            # nn.SiLU(),
+            # nn.Linear(individual_film_dim, individual_film_dim),
+        )
+        
         # self.clothing_aug_mlp = nn.Sequential(
         #     SinusoidalPositionEmbeddings(init_dim),
         #     nn.Linear(init_dim, individual_film_dim),
@@ -250,13 +260,14 @@ class Unet_Clothing(nn.Module):
             # nn.SiLU(),
             # nn.Linear(individual_film_dim, individual_film_dim),
         # )
-        # self.combined_embedding_clothing = nn.Sequential(
-        #     nn.Linear(combined_film_dim, combined_film_dim),
-        #     nn.SiLU(),
-        #     nn.Linear(combined_film_dim, combined_film_dim),
-        #     nn.SiLU(),
-        #     nn.Linear(combined_film_dim, combined_film_dim),
-        # )
+        
+        self.combined_embedding_clothing = nn.Sequential(
+            nn.Linear(combined_film_dim, combined_film_dim),
+            nn.SiLU(),
+            nn.Linear(combined_film_dim, combined_film_dim),
+            # nn.SiLU(),
+            # nn.Linear(combined_film_dim, combined_film_dim),
+        )
         
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
@@ -304,12 +315,16 @@ class Unet_Clothing(nn.Module):
             self.ups.append(nn.ModuleList(layers))
 
 
-    def forward(self, clothing_aug, pose, noise_amount_clothing):
+    def forward(self, clothing_aug, pose, noise_amount_clothing, t):
         x = self.init_conv(clothing_aug)
         pose_vector = self.masked_person_pose_mlp(pose)
         # noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
-        # film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, noise_vector), dim=1))
-        film_vector = pose_vector
+        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+            time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
+        else:
+            time_vector = self.time_mlp(t)        
+        film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, time_vector), dim=1))
+        # film_vector = pose_vector
 
         h = []
         

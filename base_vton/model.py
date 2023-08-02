@@ -135,8 +135,7 @@ class Unet_Person_Masked(nn.Module):
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
         # r = x.clone()
-        
-        time_vector = self.time_mlp(t)
+        time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         pose_vector = self.masked_person_pose_mlp(pose)
         noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
         film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))

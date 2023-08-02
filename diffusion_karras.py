@@ -27,7 +27,7 @@ def scalings_karras(sig):
     return sig_data**2/totvar, sig*sig_data/totvar.sqrt(), 1/totvar.sqrt()
 
 
-def sigmas_karras(n, sigma_min=0.01, sigma_max=5., rho=7.):
+def sigmas_karras(n, sigma_min=0.01, sigma_max=c.KARRAS_SIGMA_MAX, rho=7.):
     ramp = torch.linspace(0, 1, n)
     min_inv_rho = sigma_min**(1/rho)
     max_inv_rho = sigma_max**(1/rho)
@@ -79,7 +79,7 @@ def linear_multistep_coeff(order, t, i, j):
 
 
 @torch.no_grad()
-def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=5.):
+def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=c.KARRAS_SIGMA_MAX):
     preds = []
     x = torch.randn((num_samples,1,28,28)).to(c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
@@ -97,7 +97,7 @@ def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=5.):
     return preds
 
 
-def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigma_max=5., **kwargs):
+def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigma_max=c.KARRAS_SIGMA_MAX, **kwargs):
     preds = []
     x = torch.randn((inputs[0].shape[0],inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3])).to(c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
@@ -110,7 +110,7 @@ def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigm
     return preds
   
 
-def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=5, rho=7.0):
+def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=c.KARRAS_SIGMA_MAX, rho=7.0):
     for img_idx,img in enumerate(imgs):
         # TODO: This value of rho might be more suitable for our purposes since it spends less time
         # in the extremely high noise areas.
@@ -124,7 +124,7 @@ def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=5,
             cv2.imwrite(noised_img_save_path, noised_img.squeeze()[::-1].transpose(1,2,0))
             
 
-def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=100, sigma_max=5.0, clip_model_output=True, show_all=False):
+def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=100, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False):
     if sampler == 'euler':
         pass
         # img_sequences = p_sample_loop_karras(sample_euler_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)

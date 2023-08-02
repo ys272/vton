@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # num_eval_samples = min(8, clothing_aug.shape[0])
     # inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
     # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
-    # call_sampler_simple_karras(model_main, model_aux, inputs, steps=250, sigma_max=5.0, clip_model_output=True, show_all=True)
+    # call_sampler_simple_karras(model_main, model_aux, inputs, steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
     person = person.to(c.DEVICE)
@@ -141,7 +141,7 @@ if __name__ == '__main__':
                 clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
-                # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=5, rho=7)
+                # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
                 # Sample t uniformally for every example in the batch
                 batch_size = masked_aug.shape[0]
                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
@@ -207,7 +207,7 @@ if __name__ == '__main__':
                         if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
                             continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=250)
+                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=c.NUM_TIMESTEPS)
                         else:
                             img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
                         for i,img in enumerate(img_sequences[-1]):

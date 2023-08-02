@@ -300,7 +300,7 @@ def create_final_dataset_vton_size_to_size(size='s'):
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['s']:#,'s']:
+for size in ['t']:#,'s']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

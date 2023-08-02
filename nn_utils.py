@@ -48,15 +48,26 @@ class SinusoidalPositionEmbeddings(nn.Module):
 
 
 class Residual(nn.Module):
-    def __init__(self, fn):
+    def __init__(self, fn, dim=None):
         super().__init__()
         self.fn = fn
+        if dim is not None:
+            self.conv = nn.Conv2d(dim, dim, 3, padding=1)
+            self.act = nn.SiLU()
+        else:
+            self.conv = None
 
     def forward(self, x, y=None, *args, **kwargs):
         if y is None:
-            return self.fn(x, *args, **kwargs) + x
+            residual = self.fn(x, *args, **kwargs) + x
         else:
-            return self.fn(x, y, *args, **kwargs) + x
+            residual = self.fn(x, y, *args, **kwargs) + x
+        if self.conv is not None:
+            out = self.conv(residual)
+            out = self.act(out)
+        else:
+            out = residual
+        return out
 
 def Upsample(dim, dim_out=None):
     return nn.Sequential(
@@ -175,6 +186,7 @@ class ResnetBlock(nn.Module):
         else:
             self.block1 = BlockClothing(dim, dim_out)
         self.block2 = Block(dim_out, dim_out)
+        # self.block2 = nn.Conv2d(dim_out, dim_out, 3, padding=1)
         self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb=None):
@@ -184,7 +196,6 @@ class ResnetBlock(nn.Module):
             time_emb = rearrange(time_emb, "b c -> b c 1 1")
             scale_shift = time_emb.chunk(2, dim=1)
 
-        # TODO: Try applying the scale and shift to the second block as well.
         h = self.block1(x, scale_shift=scale_shift)
         h = self.block2(h)
         return h + self.res_conv(x)
@@ -235,6 +246,9 @@ class CrossAttention(nn.Module):
         self.to_q = nn.Conv2d(q_dim, hidden_dim, 1, bias=False)
         # linear projection, creating `dim_head` values for each head; for keys and values.
         self.to_kv = nn.Conv2d(kv_dim, hidden_dim * 2, 1, bias=False)
+        # self.to_qv = nn.Conv2d(q_dim, hidden_dim * 2, 1, bias=False)
+        # # linear projection, creating `dim_head` values for each head; for keys and values.
+        # self.to_k = nn.Conv2d(kv_dim, hidden_dim, 1, bias=False)
         # project attention values back to original dimension so it can be added to original values.
         self.to_out = nn.Conv2d(hidden_dim, q_dim, 1)
 
@@ -249,6 +263,15 @@ class CrossAttention(nn.Module):
         k, v = map(
             lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), kv
         )
+        
+        # k = self.to_k(x_kv)
+        # k = rearrange(k, "b (h c) x y -> b h c (x y)", h=self.heads)
+        # k = k * self.scale
+        
+        # qv = self.to_qv(x_q).chunk(2, dim=1)
+        # q, v = map(
+        #     lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qv
+        # )
         
         # since i==j==#elements, the resulting "b h i j" matrix dimensions are (batch, heads, # elements, # elements),
         # representing the elementwise similarity (pre softmax)
@@ -386,7 +409,7 @@ class TrainerHelper:
         return batch_num - self.last_learning_rate_reduction
     
 
-def p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
+def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
     if noise is None:
         noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
 
@@ -403,9 +426,13 @@ def p_losses(model_main, model_aux, clothing_aug, masked_aug, person, pose, nois
     # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
-        
+    
+    # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+    
     if loss_type == 'l1':
-        loss = F.l1_loss(noise, predicted_noise)
+        loss = F.l1_loss(noise, predicted_noise, reduction='none')
+        # loss[~mask_coords] /= 10
+        loss = loss.mean()
     elif loss_type == 'l2':
         loss = F.mse_loss(noise, predicted_noise)
     elif loss_type == "huber":

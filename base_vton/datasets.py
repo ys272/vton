@@ -25,10 +25,13 @@ class CustomDataset(Dataset):
     def __getitem__(self, index):
         sample = self.data_list[index]
         return self.augment(sample)
+        # clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
+        # unaugmented_sample = (clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id, 0, 0)
+        # return unaugmented_sample
+        
     
     def augment(self, sample):
         clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
-        
         noise_amount_clothing = np.random.rand() / 10
         noise_tensor = torch.randn_like(clothing)
         clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
@@ -39,7 +42,7 @@ class CustomDataset(Dataset):
         masked_aug[:, mask_coords] = masked[:, mask_coords]
         # return the sample, replacing the original clothing and masked images with their augmented versions, 
         # and adding the noise amounts (scaled by 10, so that they'll be [0,1]).
-        augmented_sample = (clothing_aug, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000))
+        augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000))
         
         # demo
         # img = ((clothing_aug+1)*127.5).cpu().numpy().astype(np.uint8)

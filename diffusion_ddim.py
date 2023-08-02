@@ -121,7 +121,7 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   Values in between 0 and 1 are an interpolation between DDIM and DDPM.
   '''
   
-  clothing_aug, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
+  clothing_aug, mask_coords, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
   with torch.cuda.amp.autocast(dtype=torch.float16):
     if cross_attns is None:
         cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
@@ -188,15 +188,32 @@ def show_example_noise_sequence(imgs):
         cv2.imwrite(f'/home/yoni/Desktop/f/other/debugging/noising_examples/{img_idx}_0_nonoise.png', ((img.cpu().numpy() + 1) * 127.5).astype(np.uint8)[::-1].transpose(1,2,0))
 
 
-def call_sampler_simple(model, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None):
-    img_sequences = p_sample_loop(model, shape, sampler, clip_model_output, eta)
+def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None):
+    img_sequences = p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None)
+    clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = inputs
     if not show_all:
-        for t_idx,img in enumerate(img_sequences[-1]):
+        for img_idx,img in enumerate(img_sequences[-1]):
             img = denormalize_img(img)
-            save_image(torch.from_numpy(img), os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{c.NUM_TIMESTEPS - t_idx - 1}.png'), nrow = 4//2)
-    else:
+            save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}.png'), nrow = 4//2)
+            masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+    else:        
         for img_idx in range(shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
-                save_image(torch.from_numpy(img), os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)
+                save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)
+                
+            masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+            # save_image(masked_img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), nrow = 4//2)
+            # save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), nrow = 4//2)
+            # save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), nrow = 4//2)
 

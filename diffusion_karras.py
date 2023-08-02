@@ -22,12 +22,12 @@ def q_sample_karras(x0, t, noise=None):
 
 
 def scalings_karras(sig):
-    totvar = sig**2+sig_data**2
-    # c_skip,c_out,c_in
+    totvar = sig**2 + sig_data**2
+    # c_skip, c_out, c_in
     return sig_data**2/totvar, sig*sig_data/totvar.sqrt(), 1/totvar.sqrt()
 
 
-def sigmas_karras(n, sigma_min=0.01, sigma_max=80., rho=7.):
+def sigmas_karras(n, sigma_min=0.01, sigma_max=5., rho=7.):
     ramp = torch.linspace(0, 1, n)
     min_inv_rho = sigma_min**(1/rho)
     max_inv_rho = sigma_max**(1/rho)
@@ -59,9 +59,9 @@ def get_ancestral_step(sigma_from, sigma_to, eta=1.):
      
 
 @torch.no_grad()
-def sample_euler_ancestral_karras(x, sigs, i, model, eta=1.):
+def sample_euler_ancestral_karras(x, sigs, i, model_main, masked_aug, pose, noise_amount_masked, cross_attns, eta=1):
     sig,sig2 = sigs[i],sigs[i+1]
-    denoised = denoise_karras(model, x, sig)
+    denoised = denoise_karras(model_main, x, sig, masked_aug, pose, noise_amount_masked, cross_attns)
     sigma_down,sigma_up = get_ancestral_step(sig, sig2, eta=eta)
     x = x + (x-denoised)/sig*(sigma_down-sig)
     return x + torch.randn_like(x)*sigma_up
@@ -79,7 +79,7 @@ def linear_multistep_coeff(order, t, i, j):
 
 
 @torch.no_grad()
-def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=80.):
+def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=5.):
     preds = []
     x = torch.randn((num_samples,1,28,28)).to(c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
@@ -97,11 +97,11 @@ def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=80.):
     return preds
 
 
-def p_sample_loop_karras(sampler, model_main, model_aux, inputs, num_samples=4, steps=100, sigma_max=80., **kwargs):
+def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigma_max=5., **kwargs):
     preds = []
-    x = torch.randn((num_samples,inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3])).to(c.DEVICE)*sigma_max
+    x = torch.randn((inputs[0].shape[0],inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3])).to(c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
-    clothing_aug, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
+    clothing_aug, mask_coords, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
     with torch.cuda.amp.autocast(dtype=torch.float16):
         cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing)
     for i in tqdm(range(len(sigs)-1)):
@@ -110,34 +110,37 @@ def p_sample_loop_karras(sampler, model_main, model_aux, inputs, num_samples=4, 
     return preds
   
 
-def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS):
+def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=5, rho=7.0):
     for img_idx,img in enumerate(imgs):
         # TODO: This value of rho might be more suitable for our purposes since it spends less time
         # in the extremely high noise areas.
         # noise_levels = sigmas_karras(steps, rho=15)
-        noise_levels = sigmas_karras(steps)
+        noise_levels = sigmas_karras(steps, sigma_max=sigma_max, rho=rho)
         for t_idx,t in enumerate(reversed(noise_levels)):
             t = torch.tensor([t]).cuda()
             noised_img,_ = q_sample_karras(img,t)
             noised_img_save_path = os.path.join('/home/yoni/Desktop/f/other/debugging/noising_examples', f'{img_idx}_{t_idx}.png')
             noised_img = denormalize_img(noised_img.cpu().numpy()) * 255
-            cv2.imwrite(noised_img_save_path, noised_img.squeeze())
+            cv2.imwrite(noised_img_save_path, noised_img.squeeze()[::-1].transpose(1,2,0))
             
 
-def call_sampler_simple_karras(model, num_samples, sampler='euler_ancestral', steps=100, sigma_max=80.0, clip_model_output=True, show_all=False):
+def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=100, sigma_max=5.0, clip_model_output=True, show_all=False):
     if sampler == 'euler':
-        img_sequences = p_sample_loop_karras(sample_euler_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
+        pass
+        # img_sequences = p_sample_loop_karras(sample_euler_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
     elif sampler == 'euler_ancestral':
-        img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
+        # img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
+        img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main, model_aux, inputs, steps=steps, sigma_max=sigma_max)
     elif sampler == 'lms':
-        img_sequences = sample_lms(model, num_samples=num_samples, steps=steps, order=4, sigma_max=sigma_max)
+        pass
+        # img_sequences = sample_lms(model, num_samples=num_samples, steps=steps, order=4, sigma_max=sigma_max)
         
     if not show_all:
         for img_idx,img in enumerate(img_sequences[-1]):
             img = denormalize_img(img)
             save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}.png'), nrow = 4//2)
     else:
-        for img_idx in range(num_samples):
+        for img_idx in range(inputs[0].shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
                 save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{steps-t_idx-1}.png'), nrow = 4//2)

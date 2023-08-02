@@ -24,10 +24,10 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, index):
         sample = self.data_list[index]
-        return self.augment(sample)
-        # clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
-        # unaugmented_sample = (clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id, 0, 0)
-        # return unaugmented_sample
+        # return self.augment(sample)
+        clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
+        unaugmented_sample = (clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id, 0, 0)
+        return unaugmented_sample
         
     
     def augment(self, sample):

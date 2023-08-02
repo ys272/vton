@@ -1,5 +1,3 @@
-import copy
-import math
 import matplotlib.pyplot as plt
 from inspect import isfunction
 from functools import partial
@@ -32,7 +30,7 @@ class Unet_Person_Masked(nn.Module):
                 
         # film embeddings
         individual_film_dim = init_dim
-        combined_film_dim = 3 * individual_film_dim
+        combined_film_dim = 2 * individual_film_dim
         
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(init_dim),
@@ -49,14 +47,14 @@ class Unet_Person_Masked(nn.Module):
             # nn.SiLU(),
             # nn.Linear(individual_film_dim, individual_film_dim),
         )
-        self.masked_person_aug_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(init_dim),
-            nn.Linear(init_dim, individual_film_dim),
-            nn.SiLU(),
-            nn.Linear(individual_film_dim, individual_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(individual_film_dim, individual_film_dim),
-        )
+        # self.masked_person_aug_mlp = nn.Sequential(
+        #     SinusoidalPositionEmbeddings(init_dim),
+        #     nn.Linear(init_dim, individual_film_dim),
+        #     nn.SiLU(),
+        #     nn.Linear(individual_film_dim, individual_film_dim),
+        #     # nn.SiLU(),
+        #     # nn.Linear(individual_film_dim, individual_film_dim),
+        # )
         
         self.combined_embedding_masked_person = nn.Sequential(
             nn.Linear(combined_film_dim, combined_film_dim),
@@ -126,21 +124,24 @@ class Unet_Person_Masked(nn.Module):
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=False), dim=dim_out))
             self.ups.append(nn.ModuleList(layers))
 
-        # self.final_res_block = ResnetBlock(level_dims[0]+init_dim, level_dims[0], film_emb_dim=combined_film_dim)
-        # self.final_res_block = nn.Conv2d(level_dims[0]+init_dim, level_dims[0], 3, padding=1)
-        # self.final_act = nn.SiLU()
+        self.final_res_block = ResnetBlock(level_dims[0]+init_dim, level_dims[0], film_emb_dim=combined_film_dim)
+        self.final_res_block = nn.Conv2d(level_dims[0]+init_dim, level_dims[0], 3, padding=1)
+        self.final_act = nn.SiLU()
         self.final_conv = nn.Conv2d(level_dims[0], 3, 3, padding=1)
 
 
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
-        # r = x.clone()
-        time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
+        r = x.clone()
+        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+            time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
+        else:
+            time_vector = self.time_mlp(t)
         pose_vector = self.masked_person_pose_mlp(pose)
-        noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
-        film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))
-        # film_vector = torch.cat((time_vector, pose_vector, noise_vector), dim=1)
-        # plt.imshow(film_vector.detach().cpu().numpy(), cmap='gray');plt.show()
+        # noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
+        # film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))
+        film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector), dim=1))
+        # film_vector = torch.cat((time_vector, pose_vector), dim=1)
         
         cross_attn_idx = 0
         
@@ -209,9 +210,9 @@ class Unet_Person_Masked(nn.Module):
                     x = torch.cat((x, h.pop()), dim=1)
                     x = res_block(x, film_vector)
 
-        # x = torch.cat((x, r), dim=1)
-        # x = self.final_res_block(x)
-        # x = self.final_act(x)
+        x = torch.cat((x, r), dim=1)
+        x = self.final_res_block(x)
+        x = self.final_act(x)
         
         return self.final_conv(x)
 
@@ -232,7 +233,7 @@ class Unet_Clothing(nn.Module):
         
         # film embeddings
         individual_film_dim = init_dim
-        combined_film_dim = 2 * individual_film_dim       
+        combined_film_dim = individual_film_dim       
         
         self.masked_person_pose_mlp = nn.Sequential(
             nn.Linear(pose_dim, individual_film_dim),
@@ -241,21 +242,21 @@ class Unet_Clothing(nn.Module):
             # nn.SiLU(),
             # nn.Linear(individual_film_dim, individual_film_dim),
         )
-        self.clothing_aug_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(init_dim),
-            nn.Linear(init_dim, individual_film_dim),
-            nn.SiLU(),
-            nn.Linear(individual_film_dim, individual_film_dim),
+        # self.clothing_aug_mlp = nn.Sequential(
+        #     SinusoidalPositionEmbeddings(init_dim),
+        #     nn.Linear(init_dim, individual_film_dim),
+        #     nn.SiLU(),
+        #     nn.Linear(individual_film_dim, individual_film_dim),
             # nn.SiLU(),
             # nn.Linear(individual_film_dim, individual_film_dim),
-        )
-        self.combined_embedding_clothing = nn.Sequential(
-            nn.Linear(combined_film_dim, combined_film_dim),
-            nn.SiLU(),
-            nn.Linear(combined_film_dim, combined_film_dim),
+        # )
+        # self.combined_embedding_clothing = nn.Sequential(
+        #     nn.Linear(combined_film_dim, combined_film_dim),
         #     nn.SiLU(),
         #     nn.Linear(combined_film_dim, combined_film_dim),
-        )
+        #     nn.SiLU(),
+        #     nn.Linear(combined_film_dim, combined_film_dim),
+        # )
         
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
 
@@ -306,9 +307,9 @@ class Unet_Clothing(nn.Module):
     def forward(self, clothing_aug, pose, noise_amount_clothing):
         x = self.init_conv(clothing_aug)
         pose_vector = self.masked_person_pose_mlp(pose)
-        noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
-        film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, noise_vector), dim=1))
-        # film_vector = torch.cat((pose_vector, noise_vector), dim=1)
+        # noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
+        # film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, noise_vector), dim=1))
+        film_vector = pose_vector
 
         h = []
         

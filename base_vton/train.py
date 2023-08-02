@@ -63,6 +63,7 @@ if __name__ == '__main__':
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
+    accumulation_rate = c.BATCH_ACCUMULATION
     batch_num = 0
 
     # Load model from checkpoint.
@@ -74,6 +75,7 @@ if __name__ == '__main__':
         scaler.load_state_dict(model_state['scaler_state_dict'])
         
         batch_num = model_state['batch_num']
+        accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
         del model_state
         torch.cuda.empty_cache()
@@ -154,7 +156,7 @@ if __name__ == '__main__':
                 # TODO: This still needs to be analyzed for correctness.
                 with torch.cuda.amp.autocast(dtype=torch.float16):
                     loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
-                    loss /= c.BATCH_ACCUMULATION
+                    loss /= accumulation_rate
                     if loss == 0 or loss > 1e10:
                         loss_oob_msg = f'----------------------------Loss is OOB: {loss}'
                         print(loss_oob_msg)
@@ -162,7 +164,7 @@ if __name__ == '__main__':
                 
                 scaler.scale(loss).backward() # loss.backward()
                 
-                if batch_num % c.BATCH_ACCUMULATION == 0:
+                if batch_num % accumulation_rate == 0:
                     scaler.step(optimizer) # optimizer.step()
                     scaler.update()
                     optimizer.zero_grad(set_to_none=True)
@@ -178,15 +180,23 @@ if __name__ == '__main__':
                 if c.RUN_EMA:
                     ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, save_from_this_batch_num=1000)
+                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                 if num_batches_since_min_loss > 5000:
                     if num_batches_since_min_loss > 20000:
                         termination_msg = 'Loss has not improved for 25,000 batches. Terminating the flow.'
                         log_file.write(termination_msg+'\n')
                         sys.exit(termination_msg)
-                    if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
+                    # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
+                    if not trainer_helper.was_accumulatation_rate_increased():
+                        accumulation_rate *= 4
+                        trainer_helper.increase_accumulation_rate()
+                        # Fake a laerning rate reduction so that one isn't made for another 5000 batches.
+                        trainer_helper.update_last_learning_rate_reduction(batch_num)
+                    # If the accumulation rate was already increased, reduce the learning rate.
+                    elif trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
+                        reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)
                         for g in optimizer.param_groups:
-                            g['lr'] /= math.sqrt(10) # divide learning rate by sqrt(10)
+                            g['lr'] /= reduction_rate
                         trainer_helper.update_last_learning_rate_reduction(batch_num)
                         lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
                         print(lr_reduction_msg)

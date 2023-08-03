@@ -54,7 +54,6 @@ if __name__ == '__main__':
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    
     initial_learning_rate = 1e-4
     
     # initial_learning_rate = 1e-7 # Use this when applying 1cycle policy.
@@ -68,7 +67,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '02-August-t_64_batch_finish_256.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '02-August-karras_with_resid.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -90,7 +89,7 @@ if __name__ == '__main__':
     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
     # num_eval_samples = min(8, clothing_aug.shape[0])
     # inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
-    # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
+    # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
     # call_sampler_simple_karras(model_main, model_aux, inputs, steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
@@ -192,6 +191,7 @@ if __name__ == '__main__':
                         trainer_helper.increase_accumulation_rate()
                         # Fake a laerning rate reduction so that one isn't made for another 5000 batches.
                         trainer_helper.update_last_learning_rate_reduction(batch_num)
+                        print('-----Accumulation rate increased\n')
                     # If the accumulation rate was already increased, reduce the learning rate.
                     elif trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
                         reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)

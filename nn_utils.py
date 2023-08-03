@@ -435,11 +435,10 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
     
-    # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
-    
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise, reduction='none')
-        # loss[~mask_coords] /= 10
+        # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+        # loss[~mask_coords] = 0
         loss = loss.mean()
     elif loss_type == 'l2':
         loss = F.mse_loss(noise, predicted_noise)

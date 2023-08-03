@@ -81,7 +81,7 @@ class Unet_Person_Masked(nn.Module):
             level_reps = level_repetitions[level_idx]
             layers = []
             for rep in range(level_reps):
-                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=None))
+                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
@@ -95,7 +95,7 @@ class Unet_Person_Masked(nn.Module):
         level_reps = level_repetitions[-1]
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=None))
+            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
         self.mid1 = nn.ModuleList(layers)
@@ -241,34 +241,23 @@ class Unet_Clothing(nn.Module):
             nn.Linear(pose_dim, individual_film_dim),
             nn.SiLU(),
             nn.Linear(individual_film_dim, individual_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(individual_film_dim, individual_film_dim),
         )
-        
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(init_dim),
             nn.Linear(init_dim, individual_film_dim),
             nn.SiLU(),
             nn.Linear(individual_film_dim, individual_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(individual_film_dim, individual_film_dim),
         )
-        
         # self.clothing_aug_mlp = nn.Sequential(
         #     SinusoidalPositionEmbeddings(init_dim),
         #     nn.Linear(init_dim, individual_film_dim),
         #     nn.SiLU(),
         #     nn.Linear(individual_film_dim, individual_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(individual_film_dim, individual_film_dim),
         # )
-        
         self.combined_embedding_clothing = nn.Sequential(
             nn.Linear(combined_film_dim, combined_film_dim),
             nn.SiLU(),
             nn.Linear(combined_film_dim, combined_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(combined_film_dim, combined_film_dim),
         )
         
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
@@ -286,7 +275,7 @@ class Unet_Clothing(nn.Module):
             level_reps = level_repetitions[level_idx]
             layers = []
             for rep in range(level_reps):
-                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, clothing=True if level_idx==len(level_dims)-2 else False))
+                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True if level_idx==len(level_dims)-2 else False))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
@@ -296,13 +285,13 @@ class Unet_Clothing(nn.Module):
         level_reps = level_repetitions[-1]
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out, dim_out, clothing=True))
+            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out))
+            layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
         self.mid2 = nn.ModuleList(layers)
 
         # Up level
@@ -313,7 +302,7 @@ class Unet_Clothing(nn.Module):
             layers = []
             layers.append(Upsample(dim_in, dim_in))
             for rep in range(level_reps):
-                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out))
+                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
             self.ups.append(nn.ModuleList(layers))
 
 

@@ -46,8 +46,8 @@ if __name__ == '__main__':
     level_dims_main = (160, 320, 480)
     level_dims_aux = (160, 320, 480) #(96, 128, 192)
     level_attentions = (False, True)
-    level_repetitions_main = (3,4,5)
-    level_repetitions_aux = (3,4,5)
+    level_repetitions_main = (3,4,4)
+    level_repetitions_aux = (3,4,4)
     
     model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)

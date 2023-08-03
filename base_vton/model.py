@@ -81,7 +81,7 @@ class Unet_Person_Masked(nn.Module):
             level_reps = level_repetitions[level_idx]
             layers = []
             for rep in range(level_reps):
-                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim))
+                layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=None))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
@@ -95,7 +95,7 @@ class Unet_Person_Masked(nn.Module):
         level_reps = level_repetitions[-1]
         layers = []
         for rep in range(level_reps):
-            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
+            layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=None))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
         self.mid1 = nn.ModuleList(layers)
@@ -125,7 +125,6 @@ class Unet_Person_Masked(nn.Module):
             self.ups.append(nn.ModuleList(layers))
 
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            # self.final_res_block = ResnetBlock(level_dims[0]+init_dim, level_dims[0], film_emb_dim=combined_film_dim)
             self.final_res_block = nn.Conv2d(level_dims[0]+init_dim, level_dims[0], 3, padding=1)
             self.final_act = nn.SiLU()
         

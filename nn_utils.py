@@ -52,22 +52,24 @@ class Residual(nn.Module):
         super().__init__()
         self.fn = fn
         if dim is not None:
-            self.conv = nn.Conv2d(dim, dim, 3, padding=1)
-            self.act = nn.SiLU()
+            self.conv = nn.Conv2d(2* dim, dim, 3, padding=1)
         else:
             self.conv = None
+        self.act = nn.SiLU()
 
     def forward(self, x, y=None, *args, **kwargs):
         if y is None:
-            residual = self.fn(x, *args, **kwargs) + x
+            out = self.fn(x, *args, **kwargs)
         else:
-            residual = self.fn(x, y, *args, **kwargs) + x
+            out = self.fn(x, y, *args, **kwargs)
         if self.conv is not None:
-            out = self.conv(residual)
-            out = self.act(out)
+            residual = torch.cat((out, x), dim=1)
+            residual = self.conv(residual)
         else:
-            out = residual
-        return out
+            residual = out + x
+        
+        return self.act(residual)
+    
 
 def Upsample(dim, dim_out=None):
     return nn.Sequential(
@@ -188,6 +190,7 @@ class ResnetBlock(nn.Module):
         self.block2 = Block(dim_out, dim_out)
         # self.block2 = nn.Conv2d(dim_out, dim_out, 3, padding=1)
         self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        self.act = nn.SiLU()
 
     def forward(self, x, time_emb=None):
         scale_shift = None
@@ -198,7 +201,7 @@ class ResnetBlock(nn.Module):
 
         h = self.block1(x, scale_shift=scale_shift)
         h = self.block2(h)
-        return h + self.res_conv(x)
+        return self.act(h + self.res_conv(x))
 
 
 '''
@@ -437,8 +440,8 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise, reduction='none')
-        # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
-        # loss[~mask_coords] = 0
+        mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+        loss[~mask_coords] = 0
         loss = loss.mean()
     elif loss_type == 'l2':
         loss = F.mse_loss(noise, predicted_noise)

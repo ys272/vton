@@ -83,9 +83,9 @@ if __name__ == '__main__':
 
     initial_learning_rate = 1e-4
     
-    initial_learning_rate = 1e-9 # Use this when applying 1cycle policy.
-    final_learning_rate = 1e-4
-    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
+    # initial_learning_rate = 1e-9 # Use this when applying 1cycle policy.
+    # final_learning_rate = 1e-4
+    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                 # TODO: This still needs to be analyzed for correctness.
                 with torch.cuda.amp.autocast(dtype=torch.float16):
                     
-                    if batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
+                    if False and batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
                         hooks = {}
                         add_hooks(model_main, base_name='main_', batch_num=batch_num)
                         add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
@@ -201,7 +201,7 @@ if __name__ == '__main__':
                     scaler.step(optimizer) # optimizer.step()
                     scaler.update()
                     
-                if batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
+                if False and batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
                         if not torch.isnan(torch.mean(param.grad)):

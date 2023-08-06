@@ -83,6 +83,7 @@ width = c.VTON_RESOLUTION[size][1]
 all_samples = {}
 
 filenames = os.listdir(dataset_dir)
+filenames = filenames
 random.seed(c.RANDOM_SEED)
 random.shuffle(filenames)
 
@@ -114,6 +115,9 @@ for filename in tqdm(filenames):
 train_frac = 0.97
 val_frac = 0.01
 test_frac = 1 - train_frac - val_frac
+# train_frac = 0.1
+# val_frac = 0.4
+# test_frac = 1 - train_frac - val_frac
 
 num_files_per_sample = 5 # clothing, masked person, original person, pose keypoints, mask coordinates
 num_total_samples = len(os.listdir(dataset_dir)) / num_files_per_sample

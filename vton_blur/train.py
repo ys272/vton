@@ -15,7 +15,28 @@ import torchvision
 import copy
 from utils import denormalize_img
 from diffusion_karras import *
-from algo.base_vton.datasets import train_dataloader, valid_dataloader, test_dataloader
+from vton_blur.datasets import train_dataloader, valid_dataloader, test_dataloader
+
+
+
+def hook_fn(name, batch_num=None):
+    def hook(module, input, output):
+        tb.add_histogram(name + '.activation', output, global_step=batch_num)
+    return hook
+                
+def add_hooks(module, name='', base_name='main_', batch_num=None):
+    for child_name, child_module in module.named_children():
+        if list(child_module.children()):
+            # If the child_module has children, recursively call add_hooks.
+            if name == '':
+                add_hooks(child_module, child_name, base_name=base_name)
+            else:
+                add_hooks(child_module, name + '.' + child_name, base_name=base_name)
+        else:
+            # If the child_module is a leaf node, register the hook
+            final_name = name + '.' + child_name if name != '' else child_name
+            # hooks[base_name + name + '.' + child_name] = child_module.register_forward_hook(hook_fn(base_name + name + '.' + child_name, batch_num=batch_num))
+            hooks[base_name + name + '.' + child_name] = child_module.register_forward_hook(hook_fn(base_name + final_name, batch_num=batch_num))
 
 
 if __name__ == '__main__':
@@ -41,13 +62,19 @@ if __name__ == '__main__':
     # level_attentions = (False, False, True)
     # level_repetitions_main = (3,4,5,6)
     # level_repetitions_aux = (3,3,5,6)
-    # hyperparams for 't'
-        
-    level_dims_main = (160, 320, 480)
-    level_dims_aux = (160, 320, 480) #(96, 128, 192)
+    
+    # level_dims_main = (128, 256, 512, 1024)
+    # level_dims_aux = (128, 256, 512, 1024)
+    # level_attentions = (False, False, True)
+    # level_repetitions_main = (3,4,6,7)
+    # level_repetitions_aux = (3,4,6,7)
+    
+    # hyperparams for 't'    
+    level_dims_main = (160, 512, 512)
+    level_dims_aux = (160, 512, 512) #(96, 128, 192)
     level_attentions = (False, True)
-    level_repetitions_main = (3,4,4)
-    level_repetitions_aux = (3,4,4)
+    level_repetitions_main = (2,2,2)
+    level_repetitions_aux = (2,2,2)
     
     model_main = Unet_Person_Masked(channels=7, init_dim=init_dim, level_dims=level_dims_main, level_attentions=level_attentions,level_dims_cross_attn=level_dims_aux, level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions = level_repetitions_aux,).to(c.DEVICE)
@@ -55,11 +82,11 @@ if __name__ == '__main__':
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model: {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    initial_learning_rate = 1e-4
+    # initial_learning_rate = 1e-4
     
-    # initial_learning_rate = 1e-7 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-5
-    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
+    initial_learning_rate = 1e-9 # Use this when applying 1cycle policy.
+    final_learning_rate = 1e-4
+    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
     
     optimizer = Adam(model_main.parameters(), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
@@ -105,7 +132,7 @@ if __name__ == '__main__':
     # input_tuple_aux = (clothing_aug.to(torch.float32).to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_clothing.to(torch.float32).to(c.DEVICE))
     # tb.add_graph(model_aux, input_tuple_aux)
     
-    epochs = 1000
+    epochs = 1000000
     ema_batch_num_start = 50000
     ema = EMA(0.995, ema_batch_num_start)
     ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
@@ -113,11 +140,14 @@ if __name__ == '__main__':
     trainer_helper = TrainerHelper(human_readable_timestamp)
     # Enable cuDNN auto-tuner: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#enable-cudnn-auto-tuner
     torch.backends.cudnn.benchmark = True
-    if c.OPTIMIZE:
-        torch.autograd.set_detect_anomaly(False) 
-        torch.autograd.profiler.profile(enabled=False)
-        torch.autograd.gradcheck_enabled = False
-        
+    torch.autograd.set_detect_anomaly(True) 
+    # if c.OPTIMIZE:
+        # torch.autograd.set_detect_anomaly(False) 
+        # torch.autograd.profiler.profile(enabled=False)
+        # torch.autograd.gradcheck_enabled = False
+    
+    hooks = {}
+    
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
@@ -133,9 +163,9 @@ if __name__ == '__main__':
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                # if batch_num < 10000:
-                #     for g in optimizer.param_groups:
-                #         g['lr'] = learning_rates[batch_num]
+                if batch_num < 10000:
+                    for g in optimizer.param_groups:
+                        g['lr'] = learning_rates[batch_num]
                 
                 clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
@@ -146,7 +176,7 @@ if __name__ == '__main__':
                 batch_size = masked_aug.shape[0]
                 
                 batch_training_start_time = time.time()  
-                
+                    
                 with torch.no_grad():
                   down32 = F.avg_pool2d(person, kernel_size=2, stride=2)
                   down32 = F.interpolate(down32, scale_factor=2, mode='nearest')
@@ -155,11 +185,17 @@ if __name__ == '__main__':
                 #   dd = ((down32[i].cpu().numpy() + 1) * 127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                 #   pp = ((person[i].cpu().numpy() + 1) * 127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                 #   cv2.imwrite(f'/home/yoni/Desktop/aa/dd_{i}.jpg',dd)
-                #   cv2.imwrite(f'/home/yoni/Desktop/aa/pp_{i}.jpg',pp)
-                  
+                #   cv2.imwrite(f'/home/yoni/Desktop/aa/pp_{i}.jpg',pp)                
+
                 with torch.cuda.amp.autocast(dtype=torch.float16):
                     # model_aux_final_input = torch.cat((down32,clothing_aug), dim=1)
                     model_aux_final_input = down32
+                    
+                    if batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
+                        hooks = {}
+                        add_hooks(model_main, base_name='main_', batch_num=batch_num)
+                        add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
+  
                     cross_attn = model_aux(model_aux_final_input, pose, noise_amount_clothing)
                     model_main_final_input = torch.cat((down32,masked_aug,mask_coords.unsqueeze(1)), dim=1)
                     out = model_main(model_main_final_input, pose, noise_amount_masked, cross_attns=cross_attn)
@@ -176,6 +212,20 @@ if __name__ == '__main__':
                 
                 scaler.scale(loss).backward() # loss.backward()
                 
+                if batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
+                    for name, param in model_main.named_parameters():
+                        tb.add_histogram('main_'+name, param, batch_num)
+                        if not torch.isnan(torch.mean(param.grad)):
+                            tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+
+                    for name, param in model_aux.named_parameters():
+                        tb.add_histogram('aux_'+name, param, batch_num)
+                        if not torch.isnan(torch.mean(param.grad)):
+                            tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                        
+                    for name, hook in hooks.items():
+                        hook.remove()
+                            
                 if batch_num % accumulation_rate == 0:
                     scaler.step(optimizer) # optimizer.step()
                     scaler.update()
@@ -223,7 +273,8 @@ if __name__ == '__main__':
                 if batch_num % c.EVAL_FREQUENCY == 0:
                     # sample one random batch
                     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(valid_dataloader))
-                    num_eval_samples = min(4, clothing_aug.shape[0])
+                    # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
+                    num_eval_samples = min(10, clothing_aug.shape[0])
                     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()
                     with torch.no_grad():
                       down32 = F.avg_pool2d(person, kernel_size=2, stride=2)
@@ -258,10 +309,6 @@ if __name__ == '__main__':
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 tb.add_scalar('train loss', loss, batch_num)
-                
-            # for name, param in model.named_parameters():
-            #     tb.add_histogram(name, param, epoch)
-            #     tb.add_histogram(f'{name}.grad', param.grad, epoch)
             
     tb.close()
     

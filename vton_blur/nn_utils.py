@@ -51,24 +51,24 @@ class Residual(nn.Module):
     def __init__(self, fn, dim=None):
         super().__init__()
         self.fn = fn
-        if dim is not None:
-            self.conv = nn.Conv2d(2* dim, dim, 3, padding=1)
-        else:
-            self.conv = None
-        self.act = nn.SiLU()
+        # if dim is not None:
+        #     self.conv = nn.Conv2d(2* dim, dim, 3, padding=1)
+        # else:
+        #     self.conv = None
+        # self.act = nn.SiLU()
 
     def forward(self, x, y=None, *args, **kwargs):
         if y is None:
             out = self.fn(x, *args, **kwargs)
         else:
             out = self.fn(x, y, *args, **kwargs)
-        if self.conv is not None:
-            residual = torch.cat((out, x), dim=1)
-            residual = self.conv(residual)
-        else:
-            residual = out + x
+        # if self.conv is not None:
+        #     residual = torch.cat((out, x), dim=1)
+        #     residual = self.conv(residual)
+        # else:
+        residual = out + x
         
-        return self.act(residual)
+        return residual #self.act(residual)
     
 
 def Upsample(dim, dim_out=None):
@@ -123,6 +123,7 @@ class Block(nn.Module):
         self.norm = nn.GroupNorm(groups, dim)
         self.act = nn.SiLU()
         self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
+        # self.proj = nn.Conv2d(dim, dim_out, 3, padding=1)
    
     def forward(self, x, scale_shift=None):
         x = self.norm(x)
@@ -188,8 +189,9 @@ class ResnetBlock(nn.Module):
         else:
             self.block1 = BlockClothing(dim, dim_out)
         self.block2 = Block(dim_out, dim_out)
-        # self.block2 = nn.Conv2d(dim_out, dim_out, 3, padding=1)
-        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        
+        # self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        self.res_conv = nn.Conv2d(dim, dim_out, 1)
         self.act = nn.SiLU()
 
     def forward(self, x, time_emb=None):
@@ -201,7 +203,7 @@ class ResnetBlock(nn.Module):
 
         h = self.block1(x, scale_shift=scale_shift)
         h = self.block2(h)
-        return self.act(h + self.res_conv(x))
+        return h + self.res_conv(x)
 
 
 '''

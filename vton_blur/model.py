@@ -8,7 +8,7 @@ import torch
 from torch import nn, einsum
 import torch.nn.functional as F
 from torchviz import make_dot
-from nn_utils import *
+from .nn_utils import *
 
     
 class Unet_Person_Masked(nn.Module):
@@ -124,7 +124,12 @@ class Unet_Person_Masked(nn.Module):
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
             self.ups.append(nn.ModuleList(layers))
         
-        self.final_conv = nn.Conv2d(level_dims[0], 3, 3, padding=1)
+        # self.final_conv = nn.Conv2d(level_dims[0], 3, 3, padding=1)
+        self.final_conv = nn.Sequential(
+            nn.GroupNorm(1, level_dims[0]),
+            nn.SiLU(),
+            nn.Conv2d(level_dims[0], 3, 3, padding=1),
+        )
 
 
     def forward(self, masked_aug, pose, noise_amount_masked, cross_attns=None):
@@ -135,7 +140,8 @@ class Unet_Person_Masked(nn.Module):
         # film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector), dim=1))
         # film_vector = torch.cat((time_vector, pose_vector), dim=1)
         
-        cross_attn_idx = 0
+        # cross_attn_idx = 0
+        cross_attn32, cross_attn16 = cross_attns
         
         h = []
 
@@ -148,8 +154,9 @@ class Unet_Person_Masked(nn.Module):
                     cross_attention = self.downs[level_idx][layer_idx+2]
                     x = res_block(x)
                     x = self_attention(x)
-                    x = cross_attention(x, cross_attns[cross_attn_idx])
-                    cross_attn_idx += 1
+                    # x = cross_attention(x, cross_attns[cross_attn_idx])
+                    # cross_attn_idx += 1
+                    x = cross_attention(x, cross_attn32)
                     h.append(x)
             else:
                 for layer_idx in range(0, len(self.downs[level_idx])-1):
@@ -166,8 +173,9 @@ class Unet_Person_Masked(nn.Module):
             cross_attention = self.mid1[mid_layer_idx+2]
             x = res_block(x)
             x = self_attention(x)
-            x = cross_attention(x, cross_attns[cross_attn_idx])
-            cross_attn_idx += 1
+            # x = cross_attention(x, cross_attns[cross_attn_idx])
+            # cross_attn_idx += 1
+            x = cross_attention(x, cross_attn16)
             if mid_layer_idx != len(self.mid1) - 2:
                 h_middle.append(x)
         
@@ -179,8 +187,9 @@ class Unet_Person_Masked(nn.Module):
                 x = torch.cat((x, h_middle.pop()), dim=1)
             x = res_block(x)
             x = self_attention(x)
-            x = cross_attention(x, cross_attns[cross_attn_idx])
-            cross_attn_idx += 1
+            # x = cross_attention(x, cross_attns[cross_attn_idx])
+            # cross_attn_idx += 1
+            x = cross_attention(x, cross_attn16)
                 
         for level_idx in range(len(self.ups)):
             level_att = self.level_attentions[len(self.level_attentions) - 1 - level_idx]
@@ -194,8 +203,9 @@ class Unet_Person_Masked(nn.Module):
                     x = torch.cat((x, h.pop()), dim=1)
                     x = res_block(x)
                     x = self_attention(x)
-                    x = cross_attention(x, cross_attns[cross_attn_idx])
-                    cross_attn_idx += 1
+                    # x = cross_attention(x, cross_attns[cross_attn_idx])
+                    # cross_attn_idx += 1
+                    x = cross_attention(x, cross_attn32)
             else:
                 for layer_idx in range(1, len(self.ups[level_idx])):
                     res_block = self.ups[level_idx][layer_idx]
@@ -300,6 +310,7 @@ class Unet_Clothing(nn.Module):
         # film_vector = pose_vector
 
         h = []
+        cross_attns = []
         
         for level_idx in range(len(self.downs)):
             for layer_idx in range(0, len(self.downs[level_idx])-1):
@@ -323,7 +334,8 @@ class Unet_Clothing(nn.Module):
                 x = torch.cat((x, h[h_idx]), dim=1)
             h_idx -= 1
             x = res_block(x)
-            h.append(x)
+            # h.append(x)
+        cross_attns.append(x)
                 
         for level_idx in range(len(self.ups)):
             upsample = self.ups[level_idx][0]
@@ -333,9 +345,10 @@ class Unet_Clothing(nn.Module):
                 x = torch.cat((x, h[h_idx]), dim=1)
                 h_idx -=1
                 x = res_block(x)
-                h.append(x)
-
-        return h
+                # h.append(x)
+        cross_attns.append(x)
+        
+        return cross_attns
 
 # image_size = 28
 # num_channels = 1

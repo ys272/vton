@@ -72,4 +72,3 @@ def denormalize_img(img):
     else:
         sys.exit('unsupported normalization')
     return img
-

@@ -39,9 +39,9 @@ def denoise_karras(model_main, model_aux, x, sig, masked_aug, clothing_aug, pose
     c_skip,c_out,c_in = scalings_karras(sig)
     t = torch.full((x.shape[0],), sig, device=c.DEVICE)
     x_t_and_masked_aug = torch.cat((x*c_in, masked_aug), dim=1)
-    with torch.cuda.amp.autocast(dtype=torch.float16):
-        cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
-        model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns) * c_out + x * c_skip
+    # with torch.cuda.amp.autocast(dtype=torch.float16):
+    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
+    model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns) * c_out + x * c_skip
     return model_output
 
 
@@ -60,9 +60,9 @@ def get_ancestral_step(sigma_from, sigma_to, eta=1.):
      
 
 @torch.no_grad()
-def sample_euler_ancestral_karras(x, sigs, i, model_main, masked_aug, pose, noise_amount_masked, cross_attns, eta=1):
+def sample_euler_ancestral_karras(x, sigs, i, model_main, model_aux, masked_aug, clothing_aug, pose, noise_amount_masked, noise_amount_clothing, eta=1):
     sig,sig2 = sigs[i],sigs[i+1]
-    denoised = denoise_karras(model_main, x, sig, masked_aug, pose, noise_amount_masked, cross_attns)
+    denoised = denoise_karras(model_main, model_aux, x, sig, masked_aug, clothing_aug, pose, noise_amount_masked, noise_amount_clothing)
     sigma_down,sigma_up = get_ancestral_step(sig, sig2, eta=eta)
     x = x + (x-denoised)/sig*(sigma_down-sig)
     return x + torch.randn_like(x)*sigma_up
@@ -109,7 +109,7 @@ def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigm
     #     x = sampler(x, sigs, i, model_main, masked_aug, pose, noise_amount_masked, cross_attns, **kwargs)
     #     preds.append(x)
     for i in tqdm(range(len(sigs)-1)):
-        x = sampler(x, sigs, i, model_main, model_aux, masked_aug, clothing_aug, pose, noise_amount_masked, noise_amount_clothing, **kwargs)
+        x = sampler(x, sigs, i, model_main, model_aux, masked_aug, clothing_aug, pose, noise_amount_masked, noise_amount_clothing)
         preds.append(x)
     return preds
   
@@ -130,10 +130,8 @@ def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=c.
 
 def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=100, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False):
     if sampler == 'euler':
-        pass
-        # img_sequences = p_sample_loop_karras(sample_euler_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
+        img_sequences = p_sample_loop_karras(sample_euler_karras, model_main, model_aux, inputs, steps=steps, sigma_max=sigma_max)
     elif sampler == 'euler_ancestral':
-        # img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model, num_samples=num_samples, steps=steps, sigma_max=sigma_max)
         img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main, model_aux, inputs, steps=steps, sigma_max=sigma_max)
     elif sampler == 'lms':
         pass
@@ -148,7 +146,7 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
                 save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{steps-t_idx-1}.png'), nrow = 4//2)
-
+    return img_sequences
 
 
 

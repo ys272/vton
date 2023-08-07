@@ -97,7 +97,7 @@ General
 '''
 
 DEVICE = 'cuda'
-BATCH_SIZE = 10
+BATCH_SIZE = 8
 RANDOM_SEED = 7
 IMAGE_SIZE = 't'
 OPTIMIZE = True

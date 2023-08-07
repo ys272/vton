@@ -434,10 +434,6 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
     
-    # import cv2
-    # x = (x_noisy.cpu().numpy() + 1) * 127.5
-    # cv2.imwrite('/home/yoni/Desktop/t.jpg', x[1][::-1].transpose(1,2,0))
-    
     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
     # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
@@ -449,7 +445,10 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
         loss[~mask_coords] = 0
         loss = loss.mean()
     elif loss_type == 'l2':
-        loss = F.mse_loss(noise, predicted_noise)
+        loss = F.mse_loss(noise, predicted_noise, reduction='none')
+        mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+        loss[~mask_coords] = 0
+        loss = loss.mean()
     elif loss_type == "huber":
         loss = F.smooth_l1_loss(noise, predicted_noise)
     else:

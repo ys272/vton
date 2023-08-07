@@ -21,8 +21,15 @@ from algo.base_vton.datasets import train_dataloader, valid_dataloader, test_dat
 
 
 def hook_fn(name, batch_num=None):
-    def hook(module, input, output):
-        tb.add_histogram(name + '.activation', output, global_step=batch_num)
+    def hook(module, inp, output):
+        mean = torch.mean(output)
+        # mean_i = torch.mean(inp[0].float())
+        if torch.isnan(mean) or torch.isinf(mean):
+            print(f'!!!!!!!!!!!!!!!!!!NAN!!! {name}, {mean}')
+        # else:
+        #     print(f'{name}: {mean_i.item():.3f} --- {mean.item():.3f}')
+        tb.add_histogram(name + '.activation-in', inp[0], global_step=batch_num)
+        tb.add_histogram(name + '.activation-out', output, global_step=batch_num)
     return hook
                 
 def add_hooks(module, name='', base_name='main_', batch_num=None):
@@ -81,11 +88,11 @@ if __name__ == '__main__':
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    initial_learning_rate = 1e-4
+    initial_learning_rate = 1e-5
     
-    # initial_learning_rate = 1e-9 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-4
-    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
+    initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
+    final_learning_rate = 1e-5
+    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
@@ -94,7 +101,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '02-August-karras_with_resid.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '07-August-18:12.pth'))#07-August-14:14.pth
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -112,17 +119,18 @@ if __name__ == '__main__':
         print(used_checkpoint_msg)
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
+
     
     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
-    # num_eval_samples = min(8, clothing_aug.shape[0])
-    # inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
-    # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
-    # call_sampler_simple_karras(model_main, model_aux, inputs, steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
-    clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
-    person = person.to(c.DEVICE)
-    grid = torchvision.utils.make_grid(person)
-    tb.add_image('images', grid)
+    # num_eval_samples = min(8, clothing_aug.shape[0])
+    # inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+    # # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
+    # im = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
+    
+    # person = person.to(c.DEVICE)
+    # grid = torchvision.utils.make_grid(person)
+    # tb.add_image('images', grid)
     
     # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
     # noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
@@ -155,19 +163,20 @@ if __name__ == '__main__':
                 batch_num += 1 
                     
                 # Code for finding maximum learning rate.
-                # if batch_num%75==0 and batch_num != 0 and initial_learning_rate < 0.01:
+                # if batch_num%100==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = initial_learning_rate
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                # if batch_num < 10000:
-                #     for g in optimizer.param_groups:
-                #         g['lr'] = learning_rates[batch_num]
+                if batch_num < 10000:
+                    for g in optimizer.param_groups:
+                        g['lr'] = learning_rates[batch_num]
                 
                 clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
+                clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose.float(), noise_amount_clothing.float(), noise_amount_masked.float()
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
@@ -181,36 +190,43 @@ if __name__ == '__main__':
                 batch_training_start_time = time.time()  
                 
                 # TODO: This still needs to be analyzed for correctness.
-                with torch.cuda.amp.autocast(dtype=torch.float16):
+                # with torch.cuda.amp.autocast(dtype=torch.float16):
                     
-                    if False and batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
-                        hooks = {}
-                        add_hooks(model_main, base_name='main_', batch_num=batch_num)
-                        add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
-                        
-                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
-                    loss /= accumulation_rate
-                    if loss == 0 or loss > 1e10:
-                        loss_oob_msg = f'----------------------------Loss is OOB: {loss}'
-                        print(loss_oob_msg)
-                        log_file.write(loss_oob_msg+'\n')
+                if batch_num % 1005 == 0:
+                    hooks = {}
+                    add_hooks(model_main, base_name='main_', batch_num=batch_num)
+                    add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
+                    
+                loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
+                train_loss_pre_accumulation = loss.item()
+                loss /= accumulation_rate
+                if loss == 0 or loss > 1e10:
+                    loss_oob_msg = f'----------------------------Loss is OOB: {loss}, for{sample_original_string_id}, {sample_unique_string_id}, {t}'
+                    print(loss_oob_msg)
+                    log_file.write(loss_oob_msg+'\n')
                 
-                scaler.scale(loss).backward() # loss.backward()
+                # scaler.scale(loss).backward() # 
+                loss.backward()
                 
                 if batch_num % accumulation_rate == 0:
-                    scaler.step(optimizer) # optimizer.step()
-                    scaler.update()
-                    
-                if False and batch_num == 1 or batch_num == 50 or batch_num % 505 == 0:
+                    # scaler.step(optimizer) # 
+                    # scaler.update()
+                    optimizer.step()
+                                            
+                if batch_num % 1005 == 0:
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
                         if not torch.isnan(torch.mean(param.grad)):
                             tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+                        else:
+                            print(f'NAN!!!------------------- {name},{batch_num}')
 
                     for name, param in model_aux.named_parameters():
                         tb.add_histogram('aux_'+name, param, batch_num)
                         if not torch.isnan(torch.mean(param.grad)):
                             tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                        else:
+                            print(f'NAN!!!------------------- {name},{batch_num}')
                         
                     for name, hook in hooks.items():
                         hook.remove()
@@ -251,7 +267,7 @@ if __name__ == '__main__':
                         print(lr_reduction_msg)
                         log_file.write(lr_reduction_msg+'\n')
                 elif num_batches_since_min_loss == 0:
-                    loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {loss.item():.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
+                    loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {train_loss_pre_accumulation:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
                     print(loss_decrease_msg)
                     log_file.write(loss_decrease_msg+'\n')
 
@@ -261,12 +277,13 @@ if __name__ == '__main__':
                     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(valid_dataloader))
                     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
                     num_eval_samples = min(5, clothing_aug.shape[0])
-                    inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
+                    inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
                     val_loss = 0
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
                         if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
                             continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                            # TODO: Try ancestral!
                             img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=c.NUM_TIMESTEPS)
                         else:
                             img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
@@ -286,7 +303,7 @@ if __name__ == '__main__':
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_clothing.png'), clothing_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
-                tb.add_scalar('train loss', loss, batch_num)
+                tb.add_scalar('train loss', train_loss_pre_accumulation, batch_num)
             
     tb.close()
     

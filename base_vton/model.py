@@ -128,9 +128,9 @@ class Unet_Person_Masked(nn.Module):
                     # layers.append(Residual(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim=dim_out))
             self.ups.append(nn.ModuleList(layers))
 
-        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            self.final_res_block = nn.Conv2d(level_dims[0]+init_dim, level_dims[0], 3, padding=1)
-            self.final_act = nn.SiLU()
+        # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+        #     self.final_res_block = nn.Conv2d(level_dims[0]+init_dim, level_dims[0], 3, padding=1)
+        #     self.final_act = nn.SiLU()
         
         self.final_conv = nn.Conv2d(level_dims[0], 3, 3, padding=1)
         # self.final_conv = nn.Sequential(
@@ -143,7 +143,7 @@ class Unet_Person_Masked(nn.Module):
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            r = x.clone()
+            # r = x.clone()
             time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         else:
             time_vector = self.time_mlp(t)
@@ -220,10 +220,10 @@ class Unet_Person_Masked(nn.Module):
                     x = torch.cat((x, h.pop()), dim=1)
                     x = res_block(x, film_vector)
 
-        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            x = torch.cat((x, r), dim=1)
-            x = self.final_res_block(x)
-            x = self.final_act(x)
+        # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+        #     x = torch.cat((x, r), dim=1)
+        #     x = self.final_res_block(x)
+        #     x = self.final_act(x)
         
         return self.final_conv(x)
 

@@ -193,9 +193,8 @@ class ResnetBlock(nn.Module):
             self.block1 = BlockClothing(dim, dim_out)
         self.block2 = Block(dim_out, dim_out)
         # self.block2 = nn.Conv2d(dim_out, dim_out, 3, padding=1)
-        # self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
-        self.res_conv = nn.Conv2d(dim, dim_out, 1)
-        self.act = nn.SiLU()
+        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        # self.res_conv = nn.Conv2d(dim, dim_out, 1)
 
     def forward(self, x, time_emb=None):
         scale_shift = None
@@ -206,7 +205,7 @@ class ResnetBlock(nn.Module):
 
         h = self.block1(x, scale_shift=scale_shift)
         h = self.block2(h)
-        return self.act(h + self.res_conv(x))
+        return h + self.res_conv(x)
 
 
 '''
@@ -441,13 +440,13 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise, reduction='none')
-        mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
-        loss[~mask_coords] = 0
+        # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+        # loss[~mask_coords] = 0
         loss = loss.mean()
     elif loss_type == 'l2':
         loss = F.mse_loss(noise, predicted_noise, reduction='none')
-        mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
-        loss[~mask_coords] = 0
+        # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
+        # loss[~mask_coords] = 0
         loss = loss.mean()
     elif loss_type == "huber":
         loss = F.smooth_l1_loss(noise, predicted_noise)

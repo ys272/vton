@@ -90,9 +90,9 @@ if __name__ == '__main__':
 
     initial_learning_rate = 1e-5
     
-    initial_learning_rate = 1e-8 # Use this when applying 1cycle policy.
-    final_learning_rate = 1e-5
-    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
+    # initial_learning_rate = 1e-9 # Use this when applying 1cycle policy.
+    # final_learning_rate = 1e-4
+    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=10000)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-5)
     scaler = torch.cuda.amp.GradScaler()
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '07-August-18:12.pth'))#07-August-14:14.pth
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '07-August-L1_slow_increase_long_train.pth'))#07-August-14:14.pth
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -170,9 +170,9 @@ if __name__ == '__main__':
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                if batch_num < 10000:
-                    for g in optimizer.param_groups:
-                        g['lr'] = learning_rates[batch_num]
+                # if batch_num < 10000:
+                #     for g in optimizer.param_groups:
+                #         g['lr'] = learning_rates[batch_num]
                 
                 clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
@@ -192,7 +192,7 @@ if __name__ == '__main__':
                 # TODO: This still needs to be analyzed for correctness.
                 # with torch.cuda.amp.autocast(dtype=torch.float16):
                     
-                if batch_num % 1005 == 0:
+                if batch_num==1 or batch_num==50 or batch_num % 1005 == 0:
                     hooks = {}
                     add_hooks(model_main, base_name='main_', batch_num=batch_num)
                     add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
@@ -213,7 +213,7 @@ if __name__ == '__main__':
                     # scaler.update()
                     optimizer.step()
                                             
-                if batch_num % 1005 == 0:
+                if batch_num==1 or batch_num==50 or batch_num % 1005 == 0:
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
                         if not torch.isnan(torch.mean(param.grad)):
@@ -230,7 +230,8 @@ if __name__ == '__main__':
                         
                     for name, hook in hooks.items():
                         hook.remove()
-                            
+                
+                if batch_num % accumulation_rate == 0:            
                     optimizer.zero_grad(set_to_none=True)
                 
                 batch_training_end_time_prev = batch_training_end_time

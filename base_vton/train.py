@@ -257,9 +257,9 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                # print(f'epoch {epoch}, batch {batch_num}, loss: {loss:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')                
+                # print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')                
                 if batch_num % 500 == 0 or (batch_num-1) % c.EVAL_FREQUENCY == 0:
-                    print(f'epoch {epoch}, batch {batch_num}, loss: {loss:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                    print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
                 if c.RUN_EMA:
                     ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)

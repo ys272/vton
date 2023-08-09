@@ -101,7 +101,7 @@ DEVICE = 'cuda'
 RANDOM_SEED = 7
 MAX_ACCUMULATION_RATE = 256
 OPTIMIZE = True
-
+USE_BFLOAT16 = True
 
 BATCH_SIZE = 8
 IMAGE_SIZE = 't'
@@ -109,4 +109,4 @@ RUN_EMA = False
 EVAL_FREQUENCY = 500
 BATCH_ACCUMULATION = 1
 USE_AMP = True
-
+ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-8 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.

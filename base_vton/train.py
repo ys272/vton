@@ -94,7 +94,7 @@ if __name__ == '__main__':
     # num_LR_decay_cycles = 10000
     # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
-    optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=1e-8)
+    optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
     scaler = torch.cuda.amp.GradScaler()
     accumulation_rate = c.BATCH_ACCUMULATION
     batch_num = 0
@@ -174,20 +174,14 @@ if __name__ == '__main__':
                 # if batch_num < num_LR_decay_cycles:
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[batch_num]
-                    
-               
-                # if batch_num%100==0 and batch_num != 0 and initial_learning_rate < 0.01:
-                #     accumulation_rate *= 4 
-                #     batch_num_last_accumulate_rate_update = batch_num
-                #     print(f'mini_batch_counter {batch_num} ar: {accumulation_rate}')
-               
                 
                 clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:
                     clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose.float(), noise_amount_clothing.float(), noise_amount_masked.float()
-                # BFLOAT16
-                clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.bfloat16), mask_coords, masked_aug.to(torch.bfloat16), person.to(torch.bfloat16), pose.to(torch.bfloat16), noise_amount_clothing.to(torch.bfloat16), noise_amount_masked.to(torch.bfloat16)
+                else:
+                    if c.USE_BFLOAT16:
+                        clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.bfloat16), mask_coords, masked_aug.to(torch.bfloat16), person.to(torch.bfloat16), pose.to(torch.bfloat16), noise_amount_clothing.to(torch.bfloat16), noise_amount_masked.to(torch.bfloat16)
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
@@ -215,13 +209,11 @@ if __name__ == '__main__':
                     log_file.write(loss_oob_msg+'\n')
                 
                 loss /= accumulation_rate
-                scaler.scale(loss).backward()
-                # loss.backward()
+                scaler.scale(loss).backward() # loss.backward()
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
-                    scaler.step(optimizer)
+                    scaler.step(optimizer) # optimizer.step()
                     scaler.update()
-                    # optimizer.step()
                                             
                 if batch_num % 1005 == 0:
                     for name, param in model_main.named_parameters():
@@ -249,7 +241,7 @@ if __name__ == '__main__':
                     if not torch.isfinite(torch.mean(param.grad)):
                         print(f'!!!!!!!!!!!!!!!!!!NAN!!!aux {name}')
                         
-                if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:            
+                if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     optimizer.zero_grad(set_to_none=True)
                 
                 batch_training_end_time_prev = batch_training_end_time
@@ -274,6 +266,7 @@ if __name__ == '__main__':
                     if accumulation_rate <= c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
                         accumulation_rate *= 4
                         trainer_helper.update_last_accumulation_rate_increase(batch_num)
+                        scaler = torch.cuda.amp.GradScaler()
                         batch_num_last_accumulate_rate_update = batch_num
                         print('-----Accumulation rate increased\n')
                         # Fake a learning rate reduction so that one isn't made for another 5000 batches.
@@ -299,13 +292,14 @@ if __name__ == '__main__':
                     clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(valid_dataloader))
                     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
                     num_eval_samples = min(5, clothing_aug.shape[0])
-                    if c.USE_AMP:
-                        # inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
-                        # BFLOAT16
-                        inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.bfloat16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.bfloat16), person[:num_eval_samples].cuda().to(torch.bfloat16), pose[:num_eval_samples].cuda().to(torch.bfloat16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.bfloat16), noise_amount_masked[:num_eval_samples].cuda().to(torch.bfloat16)]
-                        
-                    else:
+                    if not c.USE_AMP:
                         inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+                    else:
+                        if c.USE_BFLOAT16:
+                            inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.bfloat16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.bfloat16), person[:num_eval_samples].cuda().to(torch.bfloat16), pose[:num_eval_samples].cuda().to(torch.bfloat16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.bfloat16), noise_amount_masked[:num_eval_samples].cuda().to(torch.bfloat16)]
+                        else:
+                            inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
+                        
                     val_loss = 0
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
                         if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):

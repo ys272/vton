@@ -258,13 +258,13 @@ if __name__ == '__main__':
                 
                 num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                 if num_batches_since_min_loss > 5000:
-                    if num_batches_since_min_loss > 20000:
-                        termination_msg = 'Loss has not improved for 25,000 batches. Terminating the flow.'
+                    if num_batches_since_min_loss > 30000:
+                        termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
                         log_file.write(termination_msg+'\n')
                         sys.exit(termination_msg)
                     # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
                     if accumulation_rate <= c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
-                        accumulation_rate *= 4
+                        accumulation_rate *= 2
                         trainer_helper.update_last_accumulation_rate_increase(batch_num)
                         scaler = torch.cuda.amp.GradScaler()
                         batch_num_last_accumulate_rate_update = batch_num

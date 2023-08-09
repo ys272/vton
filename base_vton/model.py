@@ -139,7 +139,6 @@ class Unet_Person_Masked(nn.Module):
         #     nn.Conv2d(level_dims[0], 3, 3, padding=1),
         # )
 
-
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':

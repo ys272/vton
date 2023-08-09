@@ -390,7 +390,7 @@ class TrainerHelper:
         self.min_loss_batch_num = 0
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
-        self.accumulatation_rate_increased = False
+        self.last_accumulation_rate_increase = 0
     
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
         if loss < self.min_loss:
@@ -414,15 +414,15 @@ class TrainerHelper:
     def update_last_learning_rate_reduction(self, batch_num):
         self.last_learning_rate_reduction = batch_num        
         
+    def update_last_accumulation_rate_increase(self, batch_num):
+        self.last_accumulation_rate_increase = batch_num      
+    
     def num_batches_since_last_learning_rate_reduction(self, batch_num):
         return batch_num - self.last_learning_rate_reduction
     
-    def was_accumulatation_rate_increased(self):
-        return self.accumulatation_rate_increased
-    
-    def increase_accumulation_rate(self):
-        self.accumulatation_rate_increased = True
-    
+    def num_batches_since_last_accumulation_rate_increase(self, batch_num):
+        return batch_num - self.last_accumulation_rate_increase
+
 
 def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
     if noise is None:

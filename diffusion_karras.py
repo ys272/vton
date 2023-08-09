@@ -39,9 +39,10 @@ def denoise_karras(model_main, model_aux, x, sig, masked_aug, clothing_aug, pose
     c_skip,c_out,c_in = scalings_karras(sig)
     t = torch.full((x.shape[0],), sig, device=c.DEVICE)
     x_t_and_masked_aug = torch.cat((x*c_in, masked_aug), dim=1)
-    # with torch.cuda.amp.autocast(dtype=torch.float16):
-    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
-    model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns) * c_out + x * c_skip
+    with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
+        cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
+        model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns) * c_out + x * c_skip
+
     return model_output
 
 

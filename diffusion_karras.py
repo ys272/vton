@@ -83,7 +83,7 @@ def linear_multistep_coeff(order, t, i, j):
 @torch.no_grad()
 def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=c.KARRAS_SIGMA_MAX):
     preds = []
-    x = torch.randn((num_samples,1,28,28)).to(c.DEVICE)*sigma_max
+    x = torch.randn((num_samples,1,28,28), device=c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
     ds = []
     for i in tqdm(range(len(sigs)-1)):
@@ -101,7 +101,7 @@ def sample_lms(model, num_samples=4, steps=100, order=4, sigma_max=c.KARRAS_SIGM
 
 def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigma_max=c.KARRAS_SIGMA_MAX, **kwargs):
     preds = []
-    x = torch.randn((inputs[0].shape[0],inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3])).to(c.DEVICE)*sigma_max
+    x = torch.randn((inputs[0].shape[0],inputs[0].shape[1],inputs[0].shape[2],inputs[0].shape[3]), device=c.DEVICE)*sigma_max
     sigs = sigmas_karras(steps, sigma_max=sigma_max)
     clothing_aug, mask_coords, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
     # with torch.cuda.amp.autocast(dtype=torch.float16):

@@ -188,7 +188,7 @@ if __name__ == '__main__':
                 # Sample t uniformally for every example in the batch
                 batch_size = masked_aug.shape[0]
                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                    t = (torch.randn([batch_size])*1.2-1.2).exp().to(c.DEVICE)
+                    t = (torch.randn([batch_size], device=c.DEVICE)*1.2-1.2).exp()
                 else:
                     t = torch.randint(0, c.NUM_TIMESTEPS, (batch_size,), device=c.DEVICE)
                 
@@ -263,12 +263,12 @@ if __name__ == '__main__':
                         log_file.write(termination_msg+'\n')
                         sys.exit(termination_msg)
                     # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
-                    if accumulation_rate <= c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
+                    if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
                         accumulation_rate *= 2
                         trainer_helper.update_last_accumulation_rate_increase(batch_num)
                         scaler = torch.cuda.amp.GradScaler()
                         batch_num_last_accumulate_rate_update = batch_num
-                        print('-----Accumulation rate increased\n')
+                        print(f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n')
                         # Fake a learning rate reduction so that one isn't made for another 5000 batches.
                         # trainer_helper.update_last_learning_rate_reduction(batch_num)
                     # If the accumulation rate was already increased, reduce the learning rate.

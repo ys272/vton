@@ -9,14 +9,13 @@ from pathlib import Path
 from model import *
 from algo.nn_utils import *
 from diffusion_ddim import *
-from datasets_fmnist import train_loader as fmnist_train_dataloader
 import time
 from datetime import datetime
 import torchvision
 import copy
 from utils import denormalize_img
 from diffusion_karras import *
-from algo.base_vton.datasets import train_dataloader, valid_dataloader, test_dataloader
+from algo.base_vton.datasets import create_datasets
 
 
 def hook_fn(name, batch_num=None):
@@ -102,7 +101,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '09-August-09:54.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-L1_good_adam_bfloat16.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -122,13 +121,13 @@ if __name__ == '__main__':
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
 
+    train_dataloader, valid_dataloader, test_dataloader = create_datasets()
     
-    # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
-    
+    # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader))
     # num_eval_samples = min(8, clothing_aug.shape[0])
     # inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
-    # # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
-    # im = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
+    # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
+    # call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
     # person = person.to(c.DEVICE)
     # grid = torchvision.utils.make_grid(person)
@@ -162,7 +161,11 @@ if __name__ == '__main__':
         for epoch in range(epochs):
             for batch in train_dataloader:
                 batch_num += 1 
-                    
+                
+                if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                    min_grad = float('inf')
+                    max_grad = 0
+                    very_low_gradients = set()
                 # Code for finding maximum learning rate.
                 # if batch_num%100==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
@@ -209,24 +212,42 @@ if __name__ == '__main__':
                     log_file.write(loss_oob_msg+'\n')
                 
                 loss /= accumulation_rate
-                scaler.scale(loss).backward() # loss.backward()
+                if c.USE_AMP:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
-                    scaler.step(optimizer) # optimizer.step()
-                    scaler.update()
-                                            
+                    if c.USE_AMP:
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        optimizer.step()
+                
                 if batch_num % 1005 == 0:
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
-                        if not torch.isnan(torch.mean(param.grad)):
+                        mean = torch.mean(param.grad)
+                        if not torch.isnan(mean):
                             tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                max_grad = max(max_grad, mean)
+                                if torch.abs(mean) < 1e-8:
+                                    very_low_gradients.add('main_'+name)
                         else:
                             print(f'NAN!!!------------------- {name},{batch_num}')
-
+                        
                     for name, param in model_aux.named_parameters():
                         tb.add_histogram('aux_'+name, param, batch_num)
-                        if not torch.isnan(torch.mean(param.grad)):
+                        mean = torch.mean(param.grad)
+                        if not torch.isnan(mean):
                             tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                max_grad = max(max_grad, mean)
+                                if torch.abs(mean) < 1e-8:
+                                    very_low_gradients.add('aux_'+name)
                         else:
                             print(f'NAN!!!------------------- {name},{batch_num}')
                         
@@ -326,6 +347,9 @@ if __name__ == '__main__':
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 tb.add_scalar('train loss', train_loss_pre_accumulation, batch_num)
+                if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH and max_grad != 0:
+                    print(f'batch {batch_num}, min max grad: {min_grad}, {max_grad}')
+                    print(very_low_gradients)
             
     tb.close()
     

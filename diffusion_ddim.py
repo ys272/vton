@@ -206,8 +206,7 @@ def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_
         for img_idx in range(shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
-                save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)
-                
+                save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)                
             masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)

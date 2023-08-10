@@ -1,4 +1,5 @@
 from scipy import integrate
+import numpy as np
 from tqdm import tqdm
 from torchvision.utils import save_image
 import torch, os, cv2
@@ -137,16 +138,28 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
     elif sampler == 'lms':
         pass
         # img_sequences = sample_lms(model, num_samples=num_samples, steps=steps, order=4, sigma_max=sigma_max)
-        
+    clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = inputs
     if not show_all:
         for img_idx,img in enumerate(img_sequences[-1]):
             img = denormalize_img(img)
-            save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}.png'), nrow = 4//2)
+            save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_PRED.png'), nrow = 4//2)
+            masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
     else:
         for img_idx in range(inputs[0].shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
                 save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{steps-t_idx-1}.png'), nrow = 4//2)
+            masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
     return img_sequences
 
 

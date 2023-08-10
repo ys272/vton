@@ -334,17 +334,29 @@ class Unet_Clothing(nn.Module):
         h = []
         
         for level_idx in range(len(self.downs)):
-            for layer_idx in range(0, len(self.downs[level_idx])-1):
-                res_block = self.downs[level_idx][layer_idx]
-                x = res_block(x, film_vector)
-                if level_idx == len(self.downs) - 1:
-                    h.append(x)
+            level_att = self.level_attentions[level_idx]
+            if level_att:
+                for layer_idx in range(0, len(self.downs[level_idx])-1, 2):
+                    res_block = self.downs[level_idx][layer_idx]
+                    self_attention = self.downs[level_idx][layer_idx+1]
+                    x = res_block(x, film_vector)
+                    x = self_attention(x)
+                    if level_idx == len(self.downs) - 1:
+                        h.append(x)
+            else:
+                for layer_idx in range(0, len(self.downs[level_idx])-1):
+                    res_block = self.downs[level_idx][layer_idx]
+                    x = res_block(x, film_vector)
+                    if level_idx == len(self.downs) - 1:
+                        h.append(x)
             downsample = self.downs[level_idx][-1]
             x = downsample(x)
 
-        for mid_layer_idx in range(len(self.mid1)):
+        for mid_layer_idx in range(0, len(self.mid1), 2):
             res_block = self.mid1[mid_layer_idx]
+            self_attention = self.mid1[mid_layer_idx+1]
             x = res_block(x, film_vector)
+            x = self_attention(x)
             h.append(x)
         
         h_idx = len(h) - 1 

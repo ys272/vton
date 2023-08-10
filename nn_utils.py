@@ -48,27 +48,17 @@ class SinusoidalPositionEmbeddings(nn.Module):
 
 
 class Residual(nn.Module):
-    def __init__(self, fn, dim=None):
+    def __init__(self, fn):
         super().__init__()
         self.fn = fn
-        # if dim is not None:
-        #     self.conv = nn.Conv2d(2* dim, dim, 3, padding=1)
-        # else:
-        # self.conv = None
-        # self.act = nn.SiLU()
 
     def forward(self, x, y=None, *args, **kwargs):
         if y is None:
             out = self.fn(x, *args, **kwargs)
         else:
-            out = self.fn(x, y, *args, **kwargs)
-        # if self.conv is not None:
-        #     residual = torch.cat((out, x), dim=1)
-        #     residual = self.conv(residual)
-        # else:
-        residual = out + x
+            out = self.fn(x, y, *args, **kwargs)        
         
-        return residual#self.act(residual)
+        return out + x
     
 
 def Upsample(dim, dim_out=None):
@@ -385,21 +375,24 @@ class EMA:
         
         
 class TrainerHelper:
-    def __init__(self, human_readable_timestamp):
-        self.min_loss = float('inf')
-        self.min_loss_batch_num = 0
+    def __init__(self, human_readable_timestamp, min_loss=float('inf'), min_loss_batch_num=0, backprop_batch_num=0):
+        self.min_loss = min_loss
+        self.min_loss_batch_num = min_loss_batch_num
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
         self.last_accumulation_rate_increase = 0
+        self.backprop_batch_num = backprop_batch_num
     
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
+        self.backprop_batch_num += 1
         if loss < self.min_loss:
             self.min_loss = loss
-            self.min_loss_batch_num = batch_num
+            self.min_loss_batch_num = self.backprop_batch_num
             if batch_num >= save_from_this_batch_num:
                 save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
                 torch.save({
                     'batch_num': batch_num,
+                    'backprop_batch_num': self.backprop_batch_num,
                     'model_main_state_dict': model_main.state_dict(),
                     'model_aux_state_dict': model_aux.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
@@ -409,7 +402,7 @@ class TrainerHelper:
                     'accumulation_rate': accumulation_rate,
                 }, save_path)
         
-        return batch_num - self.min_loss_batch_num
+        return self.backprop_batch_num - self.min_loss_batch_num
     
     def update_last_learning_rate_reduction(self, batch_num):
         self.last_learning_rate_reduction = batch_num        

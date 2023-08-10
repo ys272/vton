@@ -64,8 +64,8 @@ class Unet_Person_Masked(nn.Module):
             # nn.Linear(combined_film_dim, combined_film_dim),
         )
         
+        num_heads_cross_attn = 4
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
-
         self.downs = nn.ModuleList([])
         self.mid1 = None
         self.mid2 = None
@@ -75,7 +75,7 @@ class Unet_Person_Masked(nn.Module):
         for level_idx in range(len(level_dims)-1):
             dim_in = init_dim if level_idx == 0 else level_dims[level_idx-1]
             dim_out = level_dims[level_idx]
-            dim_out_cross_attn = level_dims_cross_attn[level_idx]
+            dim_cross_attn = level_dims_cross_attn[level_idx]
             dim_next = level_dims[level_idx+1]
             level_att = level_attentions[level_idx]
             level_reps = level_repetitions[level_idx]
@@ -83,36 +83,36 @@ class Unet_Person_Masked(nn.Module):
             for rep in range(level_reps):
                 layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
-                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
-                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
+                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
+                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=dim_cross_attn/num_heads_cross_attn), dim_out, dim_cross_attn, affine=True)))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
         # Middle level
         # First half
         dim_out = level_dims[-1]
-        dim_out_cross_attn = level_dims_cross_attn[-1]
+        dim_cross_attn = level_dims_cross_attn[-1]
         level_reps = level_repetitions[-1]
         layers = []
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
-            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
-            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
+            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
+            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=dim_cross_attn/num_heads_cross_attn), dim_out, dim_cross_attn, affine=True)))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half
         layers = []
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
-            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
-            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
+            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
+            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=dim_cross_attn/num_heads_cross_attn), dim_out, dim_cross_attn, affine=True)))
         self.mid2 = nn.ModuleList(layers)
 
         # Up level
         for level_idx in range(len(level_dims)-2,-1,-1):
             dim_in = level_dims[level_idx+1]
             dim_out = level_dims[level_idx]
-            dim_out_cross_attn = level_dims_cross_attn[level_idx]
+            dim_cross_attn = level_dims_cross_attn[level_idx]
             level_att = level_attentions[level_idx]
             level_reps = level_repetitions[level_idx]
             layers = []
@@ -120,8 +120,8 @@ class Unet_Person_Masked(nn.Module):
             for rep in range(level_reps):
                 layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
-                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
-                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
+                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
+                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=dim_cross_attn/num_heads_cross_attn), dim_out, dim_cross_attn, affine=True)))
             self.ups.append(nn.ModuleList(layers))
 
         # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
@@ -284,7 +284,8 @@ class Unet_Clothing(nn.Module):
             for rep in range(level_reps):
                 layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True if level_idx==len(level_dims)-2 else False))
                 if level_att:
-                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
+                    # pass
+                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
@@ -295,7 +296,7 @@ class Unet_Clothing(nn.Module):
         layers = []
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True))
-            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
+            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half
@@ -332,6 +333,7 @@ class Unet_Clothing(nn.Module):
         for level_idx in range(len(self.downs)):
             level_att = self.level_attentions[level_idx]
             if level_att:
+                # for layer_idx in range(0, len(self.downs[level_idx])-1, 1):
                 for layer_idx in range(0, len(self.downs[level_idx])-1, 2):
                     res_block = self.downs[level_idx][layer_idx]
                     self_attention = self.downs[level_idx][layer_idx+1]
@@ -348,6 +350,7 @@ class Unet_Clothing(nn.Module):
             downsample = self.downs[level_idx][-1]
             x = downsample(x)
 
+        # for mid_layer_idx in range(0, len(self.mid1), 1):
         for mid_layer_idx in range(0, len(self.mid1), 2):
             res_block = self.mid1[mid_layer_idx]
             self_attention = self.mid1[mid_layer_idx+1]

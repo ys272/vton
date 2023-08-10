@@ -35,7 +35,7 @@ class SinusoidalPositionEmbeddings(nn.Module):
     def forward(self, time):
         device = time.device
         half_dim = self.dim // 2
-        max_period =c.NUM_TIMESTEPS
+        max_period =c.NUM_DIFFUSION_TIMESTEPS
         embeddings = math.log(max_period) / (half_dim -1)
         embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
         embeddings = time[:, None] * embeddings[None, :]

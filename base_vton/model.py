@@ -143,7 +143,7 @@ class Unet_Person_Masked(nn.Module):
         x = self.init_conv(masked_aug)
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
             # r = x.clone()
-            time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
+            time_vector = self.time_mlp((t * c.NUM_DIFFUSION_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         else:
             time_vector = self.time_mlp(t)
         pose_vector = self.masked_person_pose_mlp(pose)
@@ -319,7 +319,7 @@ class Unet_Clothing(nn.Module):
         pose_vector = self.masked_person_pose_mlp(pose)
         # noise_vector = self.clothing_aug_mlp(noise_amount_clothing)
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            time_vector = self.time_mlp((t * c.NUM_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
+            time_vector = self.time_mlp((t * c.NUM_DIFFUSION_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         else:
             time_vector = self.time_mlp(t)        
         film_vector = self.combined_embedding_clothing(torch.cat((pose_vector, time_vector), dim=1))

@@ -72,3 +72,19 @@ def denormalize_img(img):
     else:
         sys.exit('unsupported normalization')
     return img
+
+
+COLOR_AQUA = (255, 255, 0) # BGR format
+def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=None, return_value=False):
+    # Draw circles on the image at the given coordinates
+    for coord_idx in range(0, len(keypoint_coords), 2):
+        x,y = keypoint_coords[coord_idx], keypoint_coords[coord_idx+1]
+        if x != 0 or y != 0:
+            # coord = (int(coord[0] * scale_factor_0), int(coord[1] * scale_factor_1))
+            x = round(x.item() * img.shape[1])
+            y = round(y.item() * img.shape[0])
+            cv2.circle(img, (x,y), radius=2, color=COLOR_AQUA, thickness=-1)
+    if output_path:
+        cv2.imwrite(output_path, img)
+    if return_value:
+        return img

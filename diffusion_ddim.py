@@ -38,7 +38,7 @@ Experiment with one of the following two options:
 fashion, at the final timestep, like the cosine schedule.
 '''
 # betas = cosine_beta_schedule(c.NUM_TIMESTEPS)
-betas = linear_beta_schedule(c.NUM_TIMESTEPS)
+betas = linear_beta_schedule(c.NUM_DIFFUSION_TIMESTEPS)
 
 # define alphas 
 alphas = 1. - betas
@@ -171,7 +171,7 @@ def p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUS
     img_initially_noise = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
     cross_attns = None
     imgs = []
-    for timestep in tqdm(reversed(range(0, c.NUM_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_TIMESTEPS):
+    for timestep in tqdm(reversed(range(0, c.NUM_DIFFUSION_TIMESTEPS)), desc='sampling loop time step', total=c.NUM_DIFFUSION_TIMESTEPS):
         img_initially_noise, cross_attns = reverse_sampler_func(model_main, model_aux, inputs, img_initially_noise, cross_attns, torch.full((batch_size,), timestep, device=c.DEVICE, dtype=torch.long), timestep, clip_model_output=clip_model_output)
         imgs.append(img_initially_noise)
     return imgs
@@ -179,7 +179,7 @@ def p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUS
 
 def show_example_noise_sequence(imgs):
     for img_idx,img in enumerate(imgs):
-        for t_idx in range(c.NUM_TIMESTEPS):
+        for t_idx in range(c.NUM_DIFFUSION_TIMESTEPS):
             t = torch.tensor([t_idx]).cuda()
             noised_img = q_sample(img, t)
 
@@ -206,7 +206,7 @@ def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_
         for img_idx in range(shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
                 img = denormalize_img(imgs[img_idx].squeeze(0))
-                save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)                
+                save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{c.NUM_DIFFUSION_TIMESTEPS-t_idx-1}.png'), nrow = 4//2)                
             masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)

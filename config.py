@@ -74,10 +74,6 @@ schp_label_to_idx = {label:i for i,label in enumerate(schp_labels)}
 # 15: 'Right-arm', 16: 'Left-leg', 17: 'Right-leg', 18: 'Left-shoe', 19: 'Right-shoe'}
 VTON_RESOLUTION = {'t':(64,44), 's':(128,88), 'm':(256,176), 'l':(1024,704)}
 
-'''
-diffusion params
-'''
-NUM_TIMESTEPS = 256
 
 MAX_NORMALIZED_VALUE = 1
 MIN_NORMALIZED_VALUE = -MAX_NORMALIZED_VALUE
@@ -104,6 +100,7 @@ OPTIMIZE = True
 USE_BFLOAT16 = True
 BATCH_SIZE = 8
 MAX_ACCUMULATION_RATE = 256/BATCH_SIZE
+NUM_DIFFUSION_TIMESTEPS = 256
 
 '''
 DEBUG

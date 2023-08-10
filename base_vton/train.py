@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 import torchvision
 import copy
-from utils import denormalize_img
+from utils import denormalize_img, save_or_return_img_w_overlaid_keypoints
 from diffusion_karras import *
 from algo.base_vton.datasets import create_datasets
 
@@ -193,7 +193,7 @@ if __name__ == '__main__':
                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                     t = (torch.randn([batch_size], device=c.DEVICE)*1.2-1.2).exp()
                 else:
-                    t = torch.randint(0, c.NUM_TIMESTEPS, (batch_size,), device=c.DEVICE)
+                    t = torch.randint(0, c.NUM_DIFFUSION_TIMESTEPS, (batch_size,), device=c.DEVICE)
                 
                 batch_training_start_time = time.time()
                     
@@ -327,7 +327,7 @@ if __name__ == '__main__':
                             continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                             # TODO: Try ancestral!
-                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=c.NUM_TIMESTEPS)
+                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                         else:
                             img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
                         for i,img in enumerate(img_sequences[-1]):
@@ -336,14 +336,16 @@ if __name__ == '__main__':
                             val_loss += F.l1_loss(img.cpu(), person[i]).item()
                             img = denormalize_img(img)
                             full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
-                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-PRED.png'), nrow = 4//2)
+                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_PRED.png'), nrow = 4//2)
                             if suffix == '':
                                 masked_img = (((masked_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 person_img = (((person[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 clothing_img = (((clothing_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[i], return_value=True)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_clothing.png'), clothing_img)
+                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_pose.png'), pose_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 tb.add_scalar('train loss', train_loss_pre_accumulation, batch_num)

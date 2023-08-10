@@ -80,7 +80,7 @@ if __name__ == '__main__':
     images = images.to(c.DEVICE)
     grid = torchvision.utils.make_grid(images)
     tb.add_image('images', grid)
-    t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+    t = torch.randint(0, c.NUM_DIFFUSION_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
     input_tuple = (images.to(torch.float32), t)
     tb.add_graph(model, input_tuple)
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                     t = (torch.randn([len(batch)])*1.2-1.2).exp().to(c.DEVICE)
                 else:
-                    t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
+                    t = torch.randint(0, c.NUM_DIFFUSION_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
                 
                 with torch.autocast(device_type='cuda', dtype=torch.float16):
                     loss = p_losses(model, batch, t, loss_type="l1")

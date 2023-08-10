@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from torchvision.utils import save_image
 import torch, os, cv2
-from utils import denormalize_img
+from utils import denormalize_img, save_or_return_img_w_overlaid_keypoints
 import config as c
 
 
@@ -116,7 +116,7 @@ def p_sample_loop_karras(sampler, model_main, model_aux, inputs, steps=100, sigm
     return preds
   
 
-def show_example_noise_sequence_karras(imgs, steps=c.NUM_TIMESTEPS, sigma_max=c.KARRAS_SIGMA_MAX, rho=7.0):
+def show_example_noise_sequence_karras(imgs, steps=c.NUM_DIFFUSION_TIMESTEPS, sigma_max=c.KARRAS_SIGMA_MAX, rho=7.0):
     for img_idx,img in enumerate(imgs):
         # TODO: This value of rho might be more suitable for our purposes since it spends less time
         # in the extremely high noise areas.
@@ -146,9 +146,11 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
             masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[img_idx], return_value=True)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_pose.png'), pose_img)
     else:
         for img_idx in range(inputs[0].shape[0]):
             for t_idx,imgs in enumerate(img_sequences):
@@ -157,9 +159,11 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
             masked_img = (((masked_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             person_img = (((person[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             clothing_img = (((clothing_aug[img_idx].cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+            pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[img_idx], return_value=True)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_pose.png'), pose_img)
     return img_sequences
 
 

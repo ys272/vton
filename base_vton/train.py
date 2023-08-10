@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-L1_good_adam_bfloat16.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-14:37.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -155,6 +155,7 @@ if __name__ == '__main__':
         torch.autograd.gradcheck_enabled = False
     
     hooks = {}
+    running_loss = 0
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
@@ -205,6 +206,7 @@ if __name__ == '__main__':
                     loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
                     
                 train_loss_pre_accumulation = loss.item()
+                running_loss += train_loss_pre_accumulation
                 
                 if loss == 0 or loss > 1e10:
                     loss_oob_msg = f'----------------------------Loss is OOB: {loss}, for{sample_original_string_id}, {sample_unique_string_id}, {t}'
@@ -277,35 +279,37 @@ if __name__ == '__main__':
                 if c.RUN_EMA:
                     ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
-                num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
-                if num_batches_since_min_loss > 5000:
-                    if num_batches_since_min_loss > 30000:
-                        termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
-                        log_file.write(termination_msg+'\n')
-                        sys.exit(termination_msg)
-                    # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
-                    if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
-                        accumulation_rate *= 2
-                        trainer_helper.update_last_accumulation_rate_increase(batch_num)
-                        scaler = torch.cuda.amp.GradScaler()
-                        batch_num_last_accumulate_rate_update = batch_num
-                        print(f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n')
-                        # Fake a learning rate reduction so that one isn't made for another 5000 batches.
-                        # trainer_helper.update_last_learning_rate_reduction(batch_num)
-                    # If the accumulation rate was already increased, reduce the learning rate.
-                    # Commenting this out since it never seems to help.
-                    # elif trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
-                    #     reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)
-                    #     for g in optimizer.param_groups:
-                    #         g['lr'] /= reduction_rate
-                    #     trainer_helper.update_last_learning_rate_reduction(batch_num)
-                    #     lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
-                    #     print(lr_reduction_msg)
-                    #     log_file.write(lr_reduction_msg+'\n')
-                elif num_batches_since_min_loss == 0:
-                    loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {train_loss_pre_accumulation:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
-                    print(loss_decrease_msg)
-                    log_file.write(loss_decrease_msg+'\n')
+                if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
+                    running_loss /= accumulation_rate
+                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
+                    if num_batches_since_min_loss > 5000:
+                        if num_batches_since_min_loss > 30000:
+                            termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
+                            log_file.write(termination_msg+'\n')
+                            sys.exit(termination_msg)
+                        # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
+                        if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
+                            accumulation_rate *= 2
+                            trainer_helper.update_last_accumulation_rate_increase(batch_num)
+                            scaler = torch.cuda.amp.GradScaler()
+                            batch_num_last_accumulate_rate_update = batch_num
+                            print(f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n')
+                            # Fake a learning rate reduction so that one isn't made for another 5000 batches.
+                            # trainer_helper.update_last_learning_rate_reduction(batch_num)
+                        # If the accumulation rate was already increased, reduce the learning rate.
+                        # Commenting this out since it never seems to help.
+                        # elif trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
+                        #     reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)
+                        #     for g in optimizer.param_groups:
+                        #         g['lr'] /= reduction_rate
+                        #     trainer_helper.update_last_learning_rate_reduction(batch_num)
+                        #     lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
+                        #     print(lr_reduction_msg)
+                        #     log_file.write(lr_reduction_msg+'\n')
+                    elif num_batches_since_min_loss == 0:
+                        loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {train_loss_pre_accumulation:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
+                        print(loss_decrease_msg)
+                        log_file.write(loss_decrease_msg+'\n')
 
                 # Save generated images.
                 if batch_num % c.EVAL_FREQUENCY == 0:
@@ -348,7 +352,9 @@ if __name__ == '__main__':
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_pose.png'), pose_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
-                tb.add_scalar('train loss', train_loss_pre_accumulation, batch_num)
+                if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
+                    tb.add_scalar('train loss', running_loss, batch_num)
+                    running_loss = 0
                 if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH and max_grad != 0:
                     print(f'batch {batch_num}, min max grad: {min_grad}, {max_grad}')
                     print(very_low_gradients)

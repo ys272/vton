@@ -85,7 +85,6 @@ class Unet_Person_Masked(nn.Module):
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
-                    # layers.append(Residual(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim=dim_out))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
@@ -99,7 +98,6 @@ class Unet_Person_Masked(nn.Module):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
-            # layers.append(Residual(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim=dim_out))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half
@@ -108,7 +106,6 @@ class Unet_Person_Masked(nn.Module):
             layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
             layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
-            # layers.append(Residual(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim=dim_out))
         self.mid2 = nn.ModuleList(layers)
 
         # Up level
@@ -125,7 +122,6 @@ class Unet_Person_Masked(nn.Module):
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim_out, dim_out_cross_attn, affine=True), dim=dim_out))
-                    # layers.append(Residual(CrossAttention(dim_out, dim_out_cross_attn, dim_head=64), dim=dim_out))
             self.ups.append(nn.ModuleList(layers))
 
         # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':

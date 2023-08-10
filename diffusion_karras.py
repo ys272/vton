@@ -18,6 +18,8 @@ def q_sample_karras(x0, t, noise=None):
     sig = t.reshape(-1,1,1,1)
     c_skip,c_out,c_in = scalings_karras(sig)
     noised_input = x0 + noise*sig
+    # in earlier steps c_skip is close to zero, meaning the model needs to predict the original image.
+    # in later steps c_skip approaches 1, meaning the model needs to predict the noise.
     target = (x0 -c_skip*noised_input) / c_out
     return noised_input*c_in, target
 
@@ -43,7 +45,6 @@ def denoise_karras(model_main, model_aux, x, sig, masked_aug, clothing_aug, pose
     with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
         cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
         model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns) * c_out + x * c_skip
-
     return model_output
 
 
@@ -149,7 +150,7 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
             pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[img_idx], return_value=True)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
-            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{sample_original_string_id[img_idx]}_{sample_unique_string_id[img_idx]}_clothing.png'), clothing_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_pose.png'), pose_img)
     else:
         for img_idx in range(inputs[0].shape[0]):
@@ -162,7 +163,7 @@ def call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_anc
             pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[img_idx], return_value=True)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_masked.png'), masked_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_person.png'), person_img)
-            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_clothing.png'), clothing_img)
+            cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_{sample_original_string_id[img_idx]}_{sample_unique_string_id[img_idx]}_clothing.png'), clothing_img)
             cv2.imwrite(os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{img_idx}_pose.png'), pose_img)
     return img_sequences
 

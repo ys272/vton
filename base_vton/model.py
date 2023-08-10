@@ -24,8 +24,8 @@ class Unet_Person_Masked(nn.Module):
     ):
         super().__init__()
         
-        self.level_attentions = level_attentions
         self.level_dims = level_dims
+        self.level_attentions = level_attentions
         self.level_repetitions = level_repetitions
                 
         # film embeddings
@@ -232,6 +232,7 @@ class Unet_Clothing(nn.Module):
         self,
         init_dim=16,
         level_dims=(32, 48, 64),
+        level_attentions=(False, True),
         level_repetitions = (2,3,4),
         channels=3,
         pose_dim=34
@@ -239,6 +240,7 @@ class Unet_Clothing(nn.Module):
         super().__init__()
         
         self.level_dims = level_dims
+        self.level_attentions = level_attentions
         self.level_repetitions = level_repetitions
         
         # film embeddings
@@ -280,10 +282,13 @@ class Unet_Clothing(nn.Module):
             dim_in = init_dim if level_idx == 0 else level_dims[level_idx-1]
             dim_out = level_dims[level_idx]
             dim_next = level_dims[level_idx+1]
+            level_att = level_attentions[level_idx]
             level_reps = level_repetitions[level_idx]
             layers = []
             for rep in range(level_reps):
                 layers.append(ResnetBlock(init_dim if level_idx==0 and rep==0 else dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True if level_idx==len(level_dims)-2 else False))
+                if level_att:
+                    layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
             layers.append(Downsample(dim_out, dim_next))
             self.downs.append(nn.ModuleList(layers))
 
@@ -294,6 +299,7 @@ class Unet_Clothing(nn.Module):
         layers = []
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True))
+            layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out), dim=None))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half

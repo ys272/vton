@@ -232,6 +232,7 @@ if __name__ == '__main__':
                         optimizer.step()
                 
                 if batch_num % 1005 == 0:
+                    log_file.flush()
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
                         mean = torch.mean(param.grad)
@@ -336,7 +337,7 @@ if __name__ == '__main__':
                             continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                             # TODO: Try ancestral!
-                            img_sequences = p_sample_loop_karras(sample_euler_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
+                            img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                         else:
                             img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
                         for i,img in enumerate(img_sequences[-1]):

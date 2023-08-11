@@ -14,13 +14,13 @@ level_dims_aux = (160, 512, 512) #(96, 128, 192)
 level_attentions = (False, True)
 level_repetitions_main = (2,2,2)
 level_repetitions_aux = (2,2,2)
-
+    
 model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
 model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-L1_good_adam_bfloat16.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-larger_x_attn_self_attn_aux.pth'))
 model_main.load_state_dict(model_state['model_main_state_dict'])
 model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_main.eval()

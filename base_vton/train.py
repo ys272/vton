@@ -292,6 +292,7 @@ if __name__ == '__main__':
                         if num_batches_since_min_loss > 30000:
                             termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
                             log_file.write(termination_msg+'\n')
+                            log_file.flush()
                             sys.exit(termination_msg)
                         # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
                         if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:

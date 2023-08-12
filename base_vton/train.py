@@ -4,7 +4,7 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter # TensorBoard support
 from torch.nn import init
 from torchvision.utils import save_image
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from pathlib import Path
 from model import *
 from algo.nn_utils import *
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # num_LR_decay_cycles = 10000
     # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
-    optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
+    optimizer = AdamW(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
     scaler = torch.cuda.amp.GradScaler()
     accumulation_rate = c.BATCH_ACCUMULATION
     batch_num = 0
@@ -299,7 +299,9 @@ if __name__ == '__main__':
                             trainer_helper.update_last_accumulation_rate_increase(batch_num)
                             scaler = torch.cuda.amp.GradScaler()
                             batch_num_last_accumulate_rate_update = batch_num
-                            print(f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n')
+                            accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
+                            log_file.write(accumulation_rate)
+                            print(accumulation_msg)
                             # Fake a learning rate reduction so that one isn't made for another 5000 batches.
                             # trainer_helper.update_last_learning_rate_reduction(batch_num)
                         # If the accumulation rate was already increased, reduce the learning rate.
@@ -366,5 +368,3 @@ if __name__ == '__main__':
                     print(very_low_gradients)
             
     tb.close()
-    
-    

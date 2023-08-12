@@ -160,10 +160,10 @@ class Unet_Person_Masked(nn.Module):
                     self_attention = self.downs[level_idx][layer_idx+1]
                     cross_attention = self.downs[level_idx][layer_idx+2]
                     x = res_block(x, film_vector)
-                    h.append(x)
                     x = self_attention(x)
                     x = cross_attention(x, cross_attns[cross_attn_idx])
                     cross_attn_idx += 1
+                    h.append(x)
             else:
                 for layer_idx in range(0, len(self.downs[level_idx])-1):
                     res_block = self.downs[level_idx][layer_idx]

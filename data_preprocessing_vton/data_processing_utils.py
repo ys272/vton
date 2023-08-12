@@ -64,7 +64,6 @@ for idx,sigma in enumerate(blur_values):
   new_img = gaussian_blur(img, sigma)
   cv2.imwrite(f'/home/yoni/Desktop/test/b0_{idx}.png', (new_img.cpu().numpy()*255).astype(np.uint8))
 '''
-
    
 def diff_training_sample_ids_btwn_dirs(dir1, dir2):
   diff = 0

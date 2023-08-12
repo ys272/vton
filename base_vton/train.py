@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # num_LR_decay_cycles = 10000
     # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
-    optimizer = AdamW(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
+    optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
     scaler = torch.cuda.amp.GradScaler()
     accumulation_rate = c.BATCH_ACCUMULATION
     batch_num = 0
@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-14:37.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '12-August-10:24.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -306,7 +306,7 @@ if __name__ == '__main__':
                             # trainer_helper.update_last_learning_rate_reduction(batch_num)
                         # If the accumulation rate was already increased, reduce the learning rate.
                         # Commenting this out since it never seems to help.
-                        # elif trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 5000:
+                        # if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
                         #     reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)
                         #     for g in optimizer.param_groups:
                         #         g['lr'] /= reduction_rate
@@ -345,7 +345,8 @@ if __name__ == '__main__':
                         for i,img in enumerate(img_sequences[-1]):
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img = img.clamp(-1,1)
-                            val_loss += F.l1_loss(img.cpu(), person[i]).item()
+                            if suffix == '':
+                                val_loss += F.l1_loss(img.cpu(), person[i]).item()
                             img = denormalize_img(img)
                             full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
                             save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_PRED.png'), nrow = 4//2)

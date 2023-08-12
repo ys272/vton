@@ -20,7 +20,7 @@ model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_a
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '10-August-larger_x_attn_self_attn_aux.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '11-August-larger_x_attn_no_self_attn.pth'))
 model_main.load_state_dict(model_state['model_main_state_dict'])
 model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_main.eval()

@@ -1,17 +1,13 @@
-import random
 import sys
 import argparse
 from torch.utils.tensorboard import SummaryWriter # TensorBoard support
-from torch.nn import init
 from torchvision.utils import save_image
 from torch.optim import Adam, AdamW
-from pathlib import Path
 from model import *
 from algo.nn_utils import *
 from diffusion_ddim import *
 import time
 from datetime import datetime
-import torchvision
 import copy
 from utils import denormalize_img, save_or_return_img_w_overlaid_keypoints
 from diffusion_karras import *
@@ -60,7 +56,7 @@ if __name__ == '__main__':
     
     img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
-    init_dim = 64
+    init_dim = 128
     # hyperparams for 's'
     # level_dims_main = (128, 160, 320, 480)
     # level_dims_aux = (64, 96, 128, 192)
@@ -75,11 +71,13 @@ if __name__ == '__main__':
     # level_repetitions_main = (3,4,4)
     # level_repetitions_aux = (3,4,4)
     # hyperparams for 't'    
-    level_dims_main = (160, 512, 512)
-    level_dims_aux = (160, 512, 512) #(96, 128, 192)
+    level_dims_main = (128, 512, 512)
+    level_dims_aux = (128, 512, 512)
     level_attentions = (False, True)
-    level_repetitions_main = (2,2,2)
-    level_repetitions_aux = (2,2,2)
+    level_repetitions_main = (2,4,4)
+    level_repetitions_aux = (2,4,4)
+    # level_repetitions_main = (2,2,2)
+    # level_repetitions_aux = (2,2,2)
     
     model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
@@ -104,7 +102,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '12-August-10:24.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '12-August-19:47.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -121,6 +119,9 @@ if __name__ == '__main__':
         
         for g in optimizer.param_groups:
             g['lr'] = initial_learning_rate
+            # TODO: Remove this!
+            # g['eps'] = 1e-10
+
         used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}'
         print(used_checkpoint_msg)
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
@@ -147,7 +148,7 @@ if __name__ == '__main__':
     # tb.add_graph(model_aux, input_tuple_aux)
     
     epochs = 1000000
-    ema_batch_num_start = 50000
+    ema_batch_num_start = 20000
     ema = EMA(0.999, ema_batch_num_start)
     ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
     ema_model_aux = copy.deepcopy(model_aux).eval().requires_grad_(False)
@@ -262,13 +263,13 @@ if __name__ == '__main__':
                 #     for name, hook in hooks.items():
                 #         hook.remove()
                 
-                for name,param in model_main.named_parameters():
-                    if not torch.isfinite(torch.mean(param.grad)):
-                        print(f'!!!!!!!!!!!!!!!!!!NAN!!!main {name}')
+                # for name,param in model_main.named_parameters():
+                #     if not torch.isfinite(torch.mean(param.grad)):
+                #         print(f'!!!!!!!!!!!!!!!!!!NAN!!!main {name}')
                 
-                for name,param in model_aux.named_parameters():
-                    if not torch.isfinite(torch.mean(param.grad)):
-                        print(f'!!!!!!!!!!!!!!!!!!NAN!!!aux {name}')
+                # for name,param in model_aux.named_parameters():
+                #     if not torch.isfinite(torch.mean(param.grad)):
+                #         print(f'!!!!!!!!!!!!!!!!!!NAN!!!aux {name}')
                         
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     optimizer.zero_grad(set_to_none=True)
@@ -289,22 +290,23 @@ if __name__ == '__main__':
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
-                        if num_batches_since_min_loss > 30000:
+                        if num_batches_since_min_loss > 200000:
                             termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
                             log_file.write(termination_msg+'\n')
                             log_file.flush()
                             sys.exit(termination_msg)
-                        # If the loss hasn't been reduced for this long, increase the accumulation rate (up to once).
-                        if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
-                            accumulation_rate *= 2
-                            trainer_helper.update_last_accumulation_rate_increase(batch_num)
-                            scaler = torch.cuda.amp.GradScaler()
-                            batch_num_last_accumulate_rate_update = batch_num
-                            accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
-                            log_file.write(accumulation_rate)
-                            print(accumulation_msg)
+                        # If the loss hasn't been reduced for this long, increase the accumulation rate.
+                        # if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
+                        #     accumulation_rate *= 2
+                        #     trainer_helper.update_last_accumulation_rate_increase(batch_num)
+                        #     scaler = torch.cuda.amp.GradScaler()
+                        #     batch_num_last_accumulate_rate_update = batch_num
+                        #     accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
+                        #     log_file.write(accumulation_msg)
+                        #     print(accumulation_msg)
                             # Fake a learning rate reduction so that one isn't made for another 5000 batches.
                             # trainer_helper.update_last_learning_rate_reduction(batch_num)
+                            
                         # If the accumulation rate was already increased, reduce the learning rate.
                         # Commenting this out since it never seems to help.
                         # if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
@@ -316,7 +318,7 @@ if __name__ == '__main__':
                         #     print(lr_reduction_msg)
                         #     log_file.write(lr_reduction_msg+'\n')
                     elif num_batches_since_min_loss == 0:
-                        loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {train_loss_pre_accumulation:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
+                        loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {running_loss:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
                         print(loss_decrease_msg)
                         log_file.write(loss_decrease_msg+'\n')
 
@@ -339,7 +341,6 @@ if __name__ == '__main__':
                         if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
                             continue
                         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                            # TODO: Try ancestral!
                             img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                         else:
                             img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
@@ -367,6 +368,5 @@ if __name__ == '__main__':
                     running_loss = 0
                 if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH and max_grad != 0:
                     print(f'batch {batch_num}, min max grad: {min_grad}, {max_grad}')
-                    print(very_low_gradients)
-            
+                    print(very_low_gradients)            
     tb.close()

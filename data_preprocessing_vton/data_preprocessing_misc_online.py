@@ -234,7 +234,7 @@ def preprocess_schp(clothing_types:list):
             if os.path.exists(file_to_remove):
               schp_img = cv2.imread(file_to_remove)
               save_problematic_data(training_sample_id, original_img, schp_img=schp_img)
-            continue
+            
             # Delete the data that was saved so far for this training sample, as it cannot be used without the schp masking.
             person_original_img_save_path_large = os.path.join(person_original_dir, 'l', img_filename)
             person_original_img_save_path_medium = os.path.join(person_original_dir, 'm', img_filename)
@@ -270,9 +270,9 @@ def preprocess_schp(clothing_types:list):
           # inspection_path_person_masked = os.path.join(inspection_dir, f'{training_sample_id}_clothing.jpg')
           # cv2.imwrite(inspection_path_person_masked, original_img)
           
-          # if training_sample_id+'_person_original.jpg' in saved_for_inspection:
-          #   inspection_path_person_masked = os.path.join(inspection_dir, f'{training_sample_id}_person_masked.jpg')
-          #   cv2.imwrite(inspection_path_person_masked, masked_img)   
+          if training_sample_id+'_person_original.jpg' in saved_for_inspection:
+            inspection_path_person_masked = os.path.join(inspection_dir, f'{training_sample_id}_person_masked.jpg')
+            cv2.imwrite(inspection_path_person_masked, masked_img)   
     
     with open(clothing_count_path, 'w') as f:
         f.write(str(clothing_count))
@@ -355,13 +355,13 @@ def extract_clothing_type_from_filename(filename:str) -> str:
 
 def preprocess():            
     processes = [
-      #  multiprocessing.Process(target=preprocess_pose),
-      #  multiprocessing.Process(target=remove_duplicates),
+       multiprocessing.Process(target=preprocess_pose),
+       multiprocessing.Process(target=remove_duplicates),
     #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(clothing_dir, 'm'), schp_raw_output_dir_atr_clothing), kwargs={'model':'atr'}),
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
       # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
-      #  multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
+       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
     ]
     for process in processes:
         process.start()

@@ -183,8 +183,8 @@ class ResnetBlock(nn.Module):
             self.block1 = BlockClothing(dim, dim_out)
         self.block2 = Block(dim_out, dim_out)
         # self.block2 = nn.Conv2d(dim_out, dim_out, 3, padding=1)
-        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
-        # self.res_conv = nn.Conv2d(dim, dim_out, 1)
+        # self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        self.res_conv = nn.Conv2d(dim, dim_out, 1)
 
     def forward(self, x, time_emb=None):
         scale_shift = None

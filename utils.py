@@ -1,6 +1,4 @@
 import sys
-from torchvision.utils import save_image
-import torch
 import os
 import cv2
 import numpy as np

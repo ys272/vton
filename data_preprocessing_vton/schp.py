@@ -82,7 +82,7 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
     
   # Erode and dilate the areas we want to discard.
   kernel = np.ones((3, 3), dtype=np.uint8)
-  num_dilations = random.randint(2,5)
+  num_dilations = 2 # random.randint(2,5)
   mask_discard = cv2.erode(mask_discard, kernel, iterations= 3)
   mask_discard = cv2.dilate(mask_discard, kernel, iterations= 3 + num_dilations)
   

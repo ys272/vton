@@ -112,9 +112,9 @@ DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH = False
 MAIN config vars
 '''
 IMAGE_SIZE = 't'
-RUN_EMA = True
+RUN_EMA = False
 EVAL_FREQUENCY = 500
 BATCH_ACCUMULATION = 1
 USE_AMP = True
 #TODO: check again whether this value makes sense
-ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-8 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
+ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.

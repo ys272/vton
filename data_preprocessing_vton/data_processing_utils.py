@@ -225,9 +225,9 @@ def create_final_dataset_vton_size_to_size(size='s'):
         person_original_img_norm = np.copy(person_original_img_norm.astype(np.float16)[::-1])
         clothing_img_norm = np.copy(clothing_img_norm.astype(np.float16)[::-1])
         person_with_masked_clothing_img_norm = np.copy(person_with_masked_clothing_img_norm.astype(np.float16)[::-1])
-        torch.save(torch.tensor(person_original_img_norm), person_original_filepath_final)
-        torch.save(torch.tensor(clothing_img_norm), clothing_filepath_final)
-        torch.save(torch.tensor(person_with_masked_clothing_img_norm), person_with_masked_clothing_filepath_final)
+        torch.save(torch.tensor(person_original_img_norm, dtype=torch.bfloat16), person_original_filepath_final)
+        torch.save(torch.tensor(clothing_img_norm, dtype=torch.bfloat16), clothing_filepath_final)
+        torch.save(torch.tensor(person_with_masked_clothing_img_norm, dtype=torch.bfloat16), person_with_masked_clothing_filepath_final)
         torch.save(torch.tensor(mask_coordinates_arr).bool(), mask_coordinates_filepath_final)
         
         with open(pose_keypoints_filepath_final, 'w') as pose_keypoints_file:
@@ -299,7 +299,7 @@ def create_final_dataset_vton_size_to_size(size='s'):
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['t']:#,'s']:
+for size in ['s']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

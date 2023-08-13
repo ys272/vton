@@ -286,13 +286,13 @@ def filter_non_persons():
                 # remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
                 
                 # Rather than remove everything filter_non_persons flags, only remove the files that have been vetted and saved in a designated file.
-                # with open('/home/yoni/Desktop/f/other/delete for multi pose.txt', 'r') as f:
-                #     for line in f.readlines():
-                #         training_sample_id = line.strip().split(' ')[-1]
-                #         person_original_m_dir = os.path.join(person_original_dir, 'm')
-                #         img_dirs_to_modify = [person_original_dir, clothing_dir_front, clothing_dir_flat, clothing_dir, person_with_masked_clothing_dir]
-                #         txt_dirs_to_modify = [pose_keypoints_dir, mask_coordinates_dir]
-                #         remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
+                with open('/home/yoni/Desktop/f/other/delete for multi pose.txt', 'r') as f:
+                    for line in f.readlines():
+                        training_sample_id = line.strip().split(' ')[-1]
+                        person_original_m_dir = os.path.join(person_original_dir, 'm')
+                        img_dirs_to_modify = [person_original_dir, clothing_dir_front, clothing_dir_flat, clothing_dir, person_with_masked_clothing_dir]
+                        txt_dirs_to_modify = [pose_keypoints_dir, mask_coordinates_dir]
+                        remove_data(training_sample_id, img_dirs=img_dirs_to_modify, txt_dirs=txt_dirs_to_modify)
 
 
 def preprocess():            

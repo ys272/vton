@@ -355,13 +355,13 @@ def extract_clothing_type_from_filename(filename:str) -> str:
 
 def preprocess():            
     processes = [
-       multiprocessing.Process(target=preprocess_pose),
-       multiprocessing.Process(target=remove_duplicates),
+      #  multiprocessing.Process(target=preprocess_pose),
+      #  multiprocessing.Process(target=remove_duplicates),
     #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(clothing_dir, 'm'), schp_raw_output_dir_atr_clothing), kwargs={'model':'atr'}),
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
       # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
-       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
+      #  multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
     ]
     for process in processes:
         process.start()

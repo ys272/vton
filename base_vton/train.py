@@ -190,8 +190,8 @@ if __name__ == '__main__':
                 if not c.USE_AMP:
                     clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose.float(), noise_amount_clothing.float(), noise_amount_masked.float()
                 else:
-                    if c.USE_BFLOAT16:
-                        clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.bfloat16), mask_coords, masked_aug.to(torch.bfloat16), person.to(torch.bfloat16), pose.to(torch.bfloat16), noise_amount_clothing.to(torch.bfloat16), noise_amount_masked.to(torch.bfloat16)
+                    if not c.USE_BFLOAT16:
+                        clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.float16), mask_coords, masked_aug.to(torch.float16), person.to(torch.float16), pose.to(torch.float16), noise_amount_clothing.to(torch.float16), noise_amount_masked.to(torch.float16)
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
@@ -331,8 +331,8 @@ if __name__ == '__main__':
                     if not c.USE_AMP:
                         inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
                     else:
-                        if c.USE_BFLOAT16:
-                            inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.bfloat16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.bfloat16), person[:num_eval_samples].cuda().to(torch.bfloat16), pose[:num_eval_samples].cuda().to(torch.bfloat16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.bfloat16), noise_amount_masked[:num_eval_samples].cuda().to(torch.bfloat16)]
+                        if not c.USE_BFLOAT16:
+                            inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.float16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.float16), person[:num_eval_samples].cuda().to(torch.float16), pose[:num_eval_samples].cuda().to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.float16), noise_amount_masked[:num_eval_samples].cuda().to(torch.float16)]
                         else:
                             inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
                         

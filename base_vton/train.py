@@ -76,8 +76,8 @@ if __name__ == '__main__':
     level_attentions = (False, True)
     level_repetitions_main = (2,4,4)
     level_repetitions_aux = (2,4,4)
-    # level_repetitions_main = (2,2,2)
-    # level_repetitions_aux = (2,2,2)
+    level_repetitions_main = (2,2,2)
+    level_repetitions_aux = (2,2,2)
     
     model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '12-August-19:47.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '13-August-14:28.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -353,9 +353,9 @@ if __name__ == '__main__':
                             full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
                             save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_PRED.png'), nrow = 4//2)
                             if suffix == '':
-                                masked_img = (((masked_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                person_img = (((person[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                clothing_img = (((clothing_aug[i].numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                masked_img = (((masked_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                person_img = (((person[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                clothing_img = (((clothing_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[i], return_value=True)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)

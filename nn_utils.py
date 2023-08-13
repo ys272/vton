@@ -10,7 +10,7 @@ from einops.layers.torch import Rearrange
 from functools import partial
 from torch import nn, einsum
 import torch.nn.functional as F
-from diffusion_ddim import q_sample
+from diffusion_ddim import q_sample, extract, alphas_cumprod
 from diffusion_karras import q_sample_karras, scalings_karras
 
 
@@ -430,12 +430,21 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
     x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
-    
+    alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2
+    snr = alphas_squared / (1 - alphas_squared)
+    # Recommended gamma values ranged from 5 to 20. I chose 10 here.
+    min_snr_gamma_weight = torch.minimum(torch.ones_like(snr), 10 / snr)
+
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise, reduction='none')
+        if c.REVERSE_DIFFUSION_SAMPLER == 'ddim' and c.USE_MIN_SNR_GAMMA_WEIGHTING:
+            loss_per_sample = torch.mean(loss, dim=(1,2,3))
+            weighted_loss = loss_per_sample * min_snr_gamma_weight
+            loss = weighted_loss.mean()
+        else:
+            loss = loss.mean()
         # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)
         # loss[~mask_coords] = 0
-        loss = loss.mean()
     elif loss_type == 'l2':
         loss = F.mse_loss(noise, predicted_noise, reduction='none')
         # mask_coords = mask_coords.unsqueeze(1).expand(-1, 3, -1, -1)

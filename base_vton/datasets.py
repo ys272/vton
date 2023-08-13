@@ -169,7 +169,7 @@ def create_datasets():
 
     # Set batch size and other options as needed
     train_dataloader = DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=3, pin_memory=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=c.BATCH_SIZE, shuffle=False)
 
     # torch.save(test_dataloader, f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')

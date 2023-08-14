@@ -100,7 +100,7 @@ class Unet_Person_Masked(nn.Module):
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out if rep==0 else dim_out*2, dim_out, film_emb_dim=combined_film_dim))
             layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(1 * dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
+            layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(2 * dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
         self.mid2 = nn.ModuleList(layers)
 
         # Up level
@@ -116,7 +116,7 @@ class Unet_Person_Masked(nn.Module):
                 layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
-                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(1 * dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
+                    layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(2 * dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
             self.ups.append(nn.ModuleList(layers))
 
         # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':

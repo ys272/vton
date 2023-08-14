@@ -76,8 +76,8 @@ if __name__ == '__main__':
     level_attentions = (False, True)
     level_repetitions_main = (2,4,4)
     level_repetitions_aux = (2,4,4)
-    level_repetitions_main = (2,2,2)
-    level_repetitions_aux = (2,2,2)
+    # level_repetitions_main = (2,2,2)
+    # level_repetitions_aux = (2,2,2)
     
     model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '13-August-14:28.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '13-August-ddim_e-5.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -162,6 +162,8 @@ if __name__ == '__main__':
     
     hooks = {}
     running_loss = 0
+    valid_dataloader_iterator = iter(valid_dataloader)
+    last_loss_print = 0
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
@@ -211,8 +213,7 @@ if __name__ == '__main__':
                 with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
                     loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
                     
-                train_loss_pre_accumulation = loss.item()
-                running_loss += train_loss_pre_accumulation
+                running_loss += loss.item()
                 
                 if loss == 0 or loss > 1e10:
                     loss_oob_msg = f'----------------------------Loss is OOB: {loss}, for{sample_original_string_id}, {sample_unique_string_id}, {t}'
@@ -280,8 +281,8 @@ if __name__ == '__main__':
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
                 # print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')                
-                if batch_num % 500 == 0 or (batch_num-1) % c.EVAL_FREQUENCY == 0:
-                    print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                if (batch_num-1) % c.EVAL_FREQUENCY == 0:
+                    print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
                 if c.RUN_EMA:
                     ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
@@ -290,8 +291,8 @@ if __name__ == '__main__':
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
-                        if num_batches_since_min_loss > 200000:
-                            termination_msg = 'Loss has not improved for 30,000 batches. Terminating the flow.'
+                        if num_batches_since_min_loss > 100000:
+                            termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
                             log_file.write(termination_msg+'\n')
                             log_file.flush()
                             sys.exit(termination_msg)
@@ -324,8 +325,11 @@ if __name__ == '__main__':
 
                 # Save generated images.
                 if batch_num % c.EVAL_FREQUENCY == 0:
-                    # sample one random batch
-                    clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(valid_dataloader))
+                    try:
+                        clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                    except StopIteration:
+                        valid_dataloader_iterator = iter(valid_dataloader)
+                        clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
                     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
                     num_eval_samples = min(5, clothing_aug.shape[0])
                     if not c.USE_AMP:
@@ -365,8 +369,11 @@ if __name__ == '__main__':
                     tb.add_scalar('val loss', val_loss, batch_num)
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     tb.add_scalar('train loss', running_loss, batch_num)
+                    if batch_num - last_loss_print > 500:
+                        print(f'epoch {epoch}, batch {batch_num}, loss: {running_loss:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                        last_loss_print = batch_num
                     running_loss = 0
                 if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH and max_grad != 0:
                     print(f'batch {batch_num}, min max grad: {min_grad}, {max_grad}')
-                    print(very_low_gradients)            
+                    print(very_low_gradients)        
     tb.close()

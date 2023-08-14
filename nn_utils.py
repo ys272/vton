@@ -400,6 +400,8 @@ class TrainerHelper:
                     'loss': loss,
                     'learning_rate': optimizer.param_groups[0]['lr'],
                     'accumulation_rate': accumulation_rate,
+                    'last_accumulation_rate_increase': self.last_accumulation_rate_increase,
+                    'last_learning_rate_reduction': self.last_learning_rate_reduction,
                 }, save_path)
         
         return self.backprop_batch_num - self.min_loss_batch_num

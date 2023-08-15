@@ -190,12 +190,13 @@ def create_final_dataset_vton_size_to_size(size='s'):
   os.makedirs(target_inspection_dir, exist_ok=True)
   log_filepath = os.path.join(ready_datasets, f'vton_{size}_to_{size}_log.txt')
   data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses']
+  data_sources = ['paired_high_res']
   # How many additional (augmented) training samples should be created 
   # from an original training sample, coming from a particular data source.
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
-  prob_aug = {'misc_online': 1, 'multi_pose': 0.1, 'paired_high_res':0, 'same_person_two_poses':0.15}
-  prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0.5, 'same_person_two_poses':1}
+  # prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0.5, 'same_person_two_poses':1}
+  prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':1, 'same_person_two_poses':1}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:
@@ -299,7 +300,7 @@ def create_final_dataset_vton_size_to_size(size='s'):
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['s']:
+for size in ['t', 's']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

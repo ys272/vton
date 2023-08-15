@@ -375,36 +375,47 @@ class EMA:
         
         
 class TrainerHelper:
-    def __init__(self, human_readable_timestamp, min_loss=float('inf'), min_loss_batch_num=0, backprop_batch_num=0):
+    def __init__(self, human_readable_timestamp, min_loss=float('inf'), min_loss_batch_num=0, backprop_batch_num=0, last_save_batch_num=0):
         self.min_loss = min_loss
         self.min_loss_batch_num = min_loss_batch_num
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
         self.last_accumulation_rate_increase = 0
         self.backprop_batch_num = backprop_batch_num
-    
+        self.last_save_batch_num = last_save_batch_num
+        
+    def save(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
+        save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + suffix)
+        torch.save({
+            'batch_num': batch_num,
+            'backprop_batch_num': self.backprop_batch_num,
+            'model_main_state_dict': model_main.state_dict(),
+            'model_aux_state_dict': model_aux.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scaler_state_dict': scaler.state_dict(),
+            'loss': loss,
+            'learning_rate': optimizer.param_groups[0]['lr'],
+            'accumulation_rate': accumulation_rate,
+            'last_accumulation_rate_increase': self.last_accumulation_rate_increase,
+            'last_learning_rate_reduction': self.last_learning_rate_reduction,
+            'last_save_batch_num': self.last_save_batch_num,
+        }, save_path)
+                
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
         self.backprop_batch_num += 1
         if loss < self.min_loss:
             self.min_loss = loss
             self.min_loss_batch_num = self.backprop_batch_num
             if batch_num >= save_from_this_batch_num:
-                save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + '.pth')
-                torch.save({
-                    'batch_num': batch_num,
-                    'backprop_batch_num': self.backprop_batch_num,
-                    'model_main_state_dict': model_main.state_dict(),
-                    'model_aux_state_dict': model_aux.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scaler_state_dict': scaler.state_dict(),
-                    'loss': loss,
-                    'learning_rate': optimizer.param_groups[0]['lr'],
-                    'accumulation_rate': accumulation_rate,
-                    'last_accumulation_rate_increase': self.last_accumulation_rate_increase,
-                    'last_learning_rate_reduction': self.last_learning_rate_reduction,
-                }, save_path)
-        
+                save_suffix = f'_{batch_num}_MIN_loss_{loss:.3f}.pth'
+                self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+                self.last_save_batch_num = batch_num
+        elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > 10000:
+            save_suffix = f'_{batch_num}_normal_loss_{loss:.3f}.pth'
+            self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+            self.last_save_batch_num = batch_num
         return self.backprop_batch_num - self.min_loss_batch_num
+    
     
     def update_last_learning_rate_reduction(self, batch_num):
         self.last_learning_rate_reduction = batch_num        
@@ -428,9 +439,9 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
     
+    # aux_input = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), clothing_aug), dim=1)
     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
-    # x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug,clothing_aug), dim=1)
-    x_noisy_and_masked_aug = torch.cat((x_noisy,masked_aug), dim=1)
+    x_noisy_and_masked_aug = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), x_noisy,masked_aug), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
     alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2
     snr = alphas_squared / (1 - alphas_squared)

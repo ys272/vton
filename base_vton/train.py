@@ -79,7 +79,7 @@ if __name__ == '__main__':
     # level_repetitions_main = (2,2,2)
     # level_repetitions_aux = (2,2,2)
     
-    model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+    model_main = Unet_Person_Masked(channels=7, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '13-August-ddim_e-5.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '15-August-22:12.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -114,6 +114,7 @@ if __name__ == '__main__':
         batch_num_last_accumulate_rate_update = batch_num
         accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
+        last_save_batch_num = model_state['last_save_batch_num']
         del model_state
         torch.cuda.empty_cache()
         
@@ -290,7 +291,7 @@ if __name__ == '__main__':
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
-                    if num_batches_since_min_loss > 5000:
+                    if num_batches_since_min_loss > 7500:
                         if num_batches_since_min_loss > 100000:
                             termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
                             log_file.write(termination_msg+'\n')

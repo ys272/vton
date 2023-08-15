@@ -123,9 +123,9 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   
   clothing_aug, mask_coords, masked_aug, person, pose, _, _, noise_amount_clothing, noise_amount_masked = inputs
   with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
+    # aux_input = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), clothing_aug), dim=1)
     cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
-    # x_t_and_masked_aug = torch.cat((x_t,masked_aug,clothing_aug), dim=1)
-    x_t_and_masked_aug = torch.cat((x_t,masked_aug), dim=1)
+    x_t_and_masked_aug = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), x_t,masked_aug), dim=1)
     model_output = model_main(x_t_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
   
   alphas_cumprod_t = extract(alphas_cumprod, t, x_t.shape)

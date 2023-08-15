@@ -301,7 +301,7 @@ if __name__ == '__main__':
                             accumulation_rate *= 2
                             trainer_helper.update_last_accumulation_rate_increase(batch_num)
                             scaler = torch.cuda.amp.GradScaler()
-                            optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
+                            # optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
                             batch_num_last_accumulate_rate_update = batch_num
                             accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
                             log_file.write(accumulation_msg)

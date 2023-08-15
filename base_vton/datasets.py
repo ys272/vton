@@ -187,3 +187,7 @@ def create_datasets():
 
     # for batch in test_dataloader:
     #     pass
+
+
+if __name__ == '__main__':
+    create_datasets()

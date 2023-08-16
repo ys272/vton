@@ -99,10 +99,11 @@ if __name__ == '__main__':
     # Represents the number of batches we've done backprop on (will differ from batch num if accumulation_rate != 1)
     backprop_batch_num = 0
     min_loss = float('inf')
+    last_save_batch_num = 0
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '15-August-22:12.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '15-August-23:27_59423_normal_loss_0.032.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     ema = EMA(0.999, ema_batch_num_start)
     ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
     ema_model_aux = copy.deepcopy(model_aux).eval().requires_grad_(False)
-    trainer_helper = TrainerHelper(human_readable_timestamp, min_loss = min_loss, min_loss_batch_num=batch_num, backprop_batch_num=backprop_batch_num)
+    trainer_helper = TrainerHelper(human_readable_timestamp, min_loss = min_loss, min_loss_batch_num=batch_num, backprop_batch_num=backprop_batch_num, last_save_batch_num=last_save_batch_num)
     # Enable cuDNN auto-tuner: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#enable-cudnn-auto-tuner
     torch.backends.cudnn.benchmark = True
     if c.OPTIMIZE:

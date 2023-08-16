@@ -7,3 +7,4 @@ export SCHP_MODEL_TYPE="$2"
 export SCHP_INPUT_DIR="$3"
 export SCHP_OUTPUT_DIR="$4"
 python "$SCHP_DIR/simple_extractor.py" --dataset "$SCHP_MODEL_TYPE" --model-restore "$SCHP_DIR/checkpoints/$SCHP_MODEL_TYPE.pth" --input-dir "$SCHP_INPUT_DIR" --output-dir "$SCHP_OUTPUT_DIR" --logits
+#python "/home/yoni/Desktop/f/ext-code/Self-Correction-Human-Parsing/simple_extractor.py" --dataset "pascal" --model-restore "/home/yoni/Desktop/f/ext-code/Self-Correction-Human-Parsing/checkpoints/pascal.pth" --input-dir "/home/yoni/Desktop/aa/" --output-dir "/home/yoni/Desktop/bb/"

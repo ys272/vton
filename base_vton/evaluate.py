@@ -15,12 +15,12 @@ level_attentions = (False, True)
 level_repetitions_main = (2,4,4)
 level_repetitions_aux = (2,4,4)
     
-model_main = Unet_Person_Masked(channels=6, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+model_main = Unet_Person_Masked(channels=7, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
 model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '14-August-ddim_e-4,batch size grow.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '16-August-10:59_219351_normal_loss_0.030.pth'))
 model_main.load_state_dict(model_state['model_main_state_dict'])
 model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_main.eval()
@@ -44,8 +44,8 @@ else:
 num_eval_samples = min(8, clothing_aug.shape[0])
 inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
 if c.REVERSE_DIFFUSION_SAMPLER == 'ddim':
-  imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
+  imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1)
 else:
-  imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
+  imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False)
 
 print('')

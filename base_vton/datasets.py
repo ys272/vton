@@ -142,7 +142,7 @@ def create_datasets():
         # clothing, mask-coords, masked, person, pose, sample_original_string_id, sample_unique_string_id
         final_sample_orig = (sample[0][0], sample[1][0], sample[2][0], sample[3][0], sample[4][0], sample[0][1], sample[0][2])
         if num_samples == 2:
-            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0], sample[4][1], sample[4][2])
+            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0], sample[5][1], sample[5][2])
         if num_added_train_samples < num_required_train_samples:
             num_added_train_samples += num_samples
             train_samples.append(final_sample_orig)

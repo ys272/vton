@@ -1,4 +1,5 @@
 import os
+import torch
 
 
 ROOT_DIR = '/home/yoni/Desktop/f'
@@ -99,8 +100,9 @@ DEVICE = 'cuda'
 RANDOM_SEED = 7
 OPTIMIZE = True
 USE_BFLOAT16 = True
-BATCH_SIZE = 8
-MAX_ACCUMULATION_RATE = 256/BATCH_SIZE
+BATCH_SIZE = 4
+MAX_EFFECTIVE_BATCH_SIZE = 64
+MAX_ACCUMULATION_RATE = MAX_EFFECTIVE_BATCH_SIZE / BATCH_SIZE
 NUM_DIFFUSION_TIMESTEPS = 256
 
 '''
@@ -112,10 +114,20 @@ DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH = False
 '''
 MAIN config vars
 '''
-IMAGE_SIZE = 't'
+USE_CLASSIFIER_FREE_GUIDANCE = True
+IMAGE_SIZE = 's'
 RUN_EMA = False
 EVAL_FREQUENCY = 1010
-BATCH_ACCUMULATION = 1
+BATCH_ACCUMULATION = 2
 USE_AMP = True
 #TODO: check again whether this value makes sense
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
+
+if USE_AMP:
+    if USE_BFLOAT16:
+        MODEL_DTYPE = torch.bfloat16
+    else:
+        MODEL_DTYPE = torch.float16
+else:
+    MODEL_DTYPE = torch.float32
+        

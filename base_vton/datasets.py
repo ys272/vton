@@ -25,13 +25,13 @@ class CustomDataset(Dataset):
     def __getitem__(self, index):
         sample = self.data_list[index]
         # return self.augment(sample)
-        clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
-        unaugmented_sample = (clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id, 0, 0)
+        clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id = sample
+        unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, 0, 0)
         return unaugmented_sample
         
     
     def augment(self, sample):
-        clothing, mask_coords, masked, person, pose, sample_original_string_id, sample_unique_string_id = sample
+        clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id = sample
         noise_amount_clothing = np.random.rand() / 10
         noise_tensor = torch.randn_like(clothing)
         clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
@@ -42,7 +42,7 @@ class CustomDataset(Dataset):
         masked_aug[:, mask_coords] = masked[:, mask_coords]
         # return the sample, replacing the original clothing and masked images with their augmented versions, 
         # and adding the noise amounts (scaled by 10, so that they'll be [0,1]).
-        augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000))
+        augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000))
         
         # demo
         # img = ((clothing_aug+1)*127.5).cpu().numpy().astype(np.uint8)
@@ -62,7 +62,11 @@ def create_datasets():
         it should be replaced with (0,0).
         '''
         normalized_keypoints = []
-        for keypoint in keypoints:
+        # There are a total of 17 keypoints, but the first five are of the face rather than the body.
+        # For the concatenated keypoints, we only use the body keypoints (but for the embedding we take everything).
+        num_needed_keypoint_dims = 12
+        keypoints_to_concat = torch.zeros((num_needed_keypoint_dims, c.VTON_RESOLUTION[c.IMAGE_SIZE][0], c.VTON_RESOLUTION[c.IMAGE_SIZE][1]), dtype=c.MODEL_DTYPE)
+        for k_idx,keypoint in enumerate(keypoints):
             if keypoint is None:
                 normalized_keypoints.append(0)
                 normalized_keypoints.append(0)
@@ -71,8 +75,26 @@ def create_datasets():
                 normalized_keypoints.append(keypoint[1]/height)
                 assert keypoint[0]/width <= 1
                 assert keypoint[1]/height <= 1
-        normalized_keypoints = torch.tensor(normalized_keypoints, dtype=torch.float16)
-        return normalized_keypoints
+                # The first 5 keypoints are of the face - so we don't concatenate their values to the image.
+                if k_idx > 4:
+                    # We flip the order of the keypoints because pytorch and tensorflow (where the keypoints come from) use a different axis ordering system.
+                    keypoints_to_concat[k_idx-5][min(c.VTON_RESOLUTION[c.IMAGE_SIZE][0]-1, keypoint[1]), min(c.VTON_RESOLUTION[c.IMAGE_SIZE][1]-1, keypoint[0])] = 1
+        normalized_keypoints = torch.tensor(normalized_keypoints, dtype=torch.bfloat16)
+        
+        return (normalized_keypoints, keypoints_to_concat)
+    
+    
+    # def process_keypoints(keypoints):
+    #     normalized_keypoints = []
+    #     for keypoint in keypoints:
+    #         if keypoint is None:
+    #             normalized_keypoints.append(0)
+    #             normalized_keypoints.append(0)
+    #         else:
+    #             normalized_keypoints.append(keypoint[0])
+    #             normalized_keypoints.append(keypoint[1])
+    #     normalized_keypoints = torch.tensor(normalized_keypoints, dtype=torch.bfloat16)
+    #     return normalized_keypoints
 
     start_time = time.time()
     print(f'Started loading data')
@@ -139,10 +161,11 @@ def create_datasets():
         # file versions. Then, the different files belonging to each (original or augmented) sample
         # should be sorted by the 'sample type', so that we have a consistent ordering.
         sample.sort(key=lambda x:(x[2],x[3]))
-        # clothing, mask-coords, masked, person, pose, sample_original_string_id, sample_unique_string_id
-        final_sample_orig = (sample[0][0], sample[1][0], sample[2][0], sample[3][0], sample[4][0], sample[0][1], sample[0][2])
+        # clothing, mask-coords, masked, person, pose vector, pose matrix, sample_original_string_id, sample_unique_string_id
+        # the pose vector and pose matrix are originally stored as a tuple.
+        final_sample_orig = (sample[0][0], sample[1][0], sample[2][0], sample[3][0], sample[4][0][0], sample[4][0][1], sample[0][1], sample[0][2])
         if num_samples == 2:
-            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0], sample[5][1], sample[5][2])
+            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0][0], sample[9][0][1], sample[5][1], sample[5][2])
         if num_added_train_samples < num_required_train_samples:
             num_added_train_samples += num_samples
             train_samples.append(final_sample_orig)
@@ -158,7 +181,6 @@ def create_datasets():
             test_samples.append(final_sample_orig)
             if num_samples == 2:
                 test_samples.append(final_sample_aug)
-        
         
     print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}\n')
     print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}\n')
@@ -179,14 +201,14 @@ def create_datasets():
     
     return train_dataloader, valid_dataloader, test_dataloader
 
-    # for batch in train_dataloader:
-    #     pass
+    for batch in train_dataloader:
+        pass
 
-    # for batch in valid_dataloader:
-    #     pass
+    for batch in valid_dataloader:
+        pass
 
-    # for batch in test_dataloader:
-    #     pass
+    for batch in test_dataloader:
+        pass
 
 
 if __name__ == '__main__':

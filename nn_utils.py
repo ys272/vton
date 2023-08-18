@@ -1,3 +1,4 @@
+import random
 import os
 import math
 import torch
@@ -407,7 +408,7 @@ class TrainerHelper:
             self.min_loss = loss
             self.min_loss_batch_num = self.backprop_batch_num
             if batch_num >= save_from_this_batch_num:
-                save_suffix = f'_{batch_num}_MIN_loss_{loss:.3f}.pth'
+                save_suffix = f'_MIN_loss.pth'
                 self.last_save_batch_num = batch_num
                 self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
         elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > 10000:
@@ -430,7 +431,7 @@ class TrainerHelper:
         return batch_num - self.last_accumulation_rate_increase
 
 
-def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
+def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
     if noise is None:
         noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
 
@@ -439,10 +440,15 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
     
-    # aux_input = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), clothing_aug), dim=1)
-    cross_attns = model_aux(clothing_aug, pose, noise_amount_clothing, t)
-    x_noisy_and_masked_aug = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), x_noisy,masked_aug), dim=1)
-    predicted_noise = model_main(x_noisy_and_masked_aug, pose, noise_amount_masked, t, cross_attns=cross_attns)
+    if c.USE_CLASSIFIER_FREE_GUIDANCE and random.random() < 0.1:
+        cross_attns = [torch.zeros((c.BATCH_SIZE, 512, 16, 11), device=c.DEVICE), torch.zeros((c.BATCH_SIZE, 512, 32, 22), device=c.DEVICE)]
+        mask_coords = torch.zeros_like(mask_coords)
+        masked_aug = torch.zeros_like(masked_aug)
+        pose_vector = torch.zeros_like(pose_vector)
+    else:
+        cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+    x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
+    predicted_noise = model_main(x_noisy_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
     alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2
     snr = alphas_squared / (1 - alphas_squared)
     # Recommended gamma values ranged from 5 to 20. I chose 10 here.

@@ -79,6 +79,7 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
   #   if num_coat_pixels > num_upper_clothes_pixels:
   #     # Do not discard pixels belonging to upper clothes.
   #     mask_discard[mask_upper_clothes] = 0
+  # mask_discard[lip_argmaxes==7] = 1
     
   # Erode and dilate the areas we want to discard.
   kernel = np.ones((3, 3), dtype=np.uint8)
@@ -110,7 +111,6 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
   mask_keep_body = mask_keep_body & np.isin(atr_argmaxes,atr_w_densepose)    
   
   img[(mask_discard==1) & (mask_keep_body==0)] = [128,128,128]
-  
   
   if stats:
     detected_clothing_types, counts = np.unique(atr_argmaxes, return_counts=True)

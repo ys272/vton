@@ -78,7 +78,6 @@ def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=No
     for coord_idx in range(0, len(keypoint_coords), 2):
         x,y = keypoint_coords[coord_idx], keypoint_coords[coord_idx+1]
         if x != 0 or y != 0:
-            # coord = (int(coord[0] * scale_factor_0), int(coord[1] * scale_factor_1))
             x = round(x.item() * img.shape[1])
             y = round(y.item() * img.shape[0])
             cv2.circle(img, (x,y), radius=2, color=COLOR_AQUA, thickness=-1)

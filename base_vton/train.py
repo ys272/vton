@@ -58,28 +58,20 @@ if __name__ == '__main__':
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
     init_dim = 128
     # hyperparams for 's'
-    # level_dims_main = (128, 160, 320, 480)
-    # level_dims_aux = (64, 96, 128, 192)
-    # level_attentions = (False, False, True)
-    # level_repetitions_main = (3,4,5,6)
-    # level_repetitions_aux = (3,3,5,6)
+    level_dims_main = (128, 256, 512, 512)
+    level_dims_aux = (128, 256, 512, 512)
+    level_attentions = (False, False, True)
+    level_repetitions_main = (2,2,4,4)
+    level_repetitions_aux = (2,2,4,4)
     
-    # hyperparams for 't'
-    # level_dims_main = (160, 320, 480)
-    # level_dims_aux = (160, 320, 480) #(96, 128, 192)
-    # level_attentions = (False, True)
-    # level_repetitions_main = (3,4,4)
-    # level_repetitions_aux = (3,4,4)
     # hyperparams for 't'    
-    level_dims_main = (128, 512, 512)
-    level_dims_aux = (128, 512, 512)
-    level_attentions = (False, True)
-    level_repetitions_main = (2,4,4)
-    level_repetitions_aux = (2,4,4)
-    # level_repetitions_main = (2,2,2)
-    # level_repetitions_aux = (2,2,2)
+    # level_dims_main = (128, 512, 512)
+    # level_dims_aux = (128, 512, 512)
+    # level_attentions = (False, True)
+    # level_repetitions_main = (2,4,4)
+    # level_repetitions_aux = (2,4,4)
     
-    model_main = Unet_Person_Masked(channels=7, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+    model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
@@ -103,7 +95,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '15-August-23:27_59423_normal_loss_0.032.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '17-August-21:52_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -136,18 +128,6 @@ if __name__ == '__main__':
     # inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
     # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
     # call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
-    
-    # person = person.to(c.DEVICE)
-    # grid = torchvision.utils.make_grid(person)
-    # tb.add_image('images', grid)
-    
-    # t = torch.randint(0, c.NUM_TIMESTEPS, (c.BATCH_SIZE,), device=c.DEVICE)
-    # noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
-    # noise_and_masked_aug = torch.cat((noise, masked_aug), dim=1).to(torch.float32)
-    # input_tuple_main = (noise_and_masked_aug.to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_masked.to(torch.float32).to(c.DEVICE), t.to(c.DEVICE))
-    # tb.add_graph(model_main, input_tuple_main)
-    # input_tuple_aux = (clothing_aug.to(torch.float32).to(c.DEVICE), pose.to(torch.float32).to(c.DEVICE), noise_amount_clothing.to(torch.float32).to(c.DEVICE))
-    # tb.add_graph(model_aux, input_tuple_aux)
     
     epochs = 1000000
     ema_batch_num_start = 20000
@@ -189,13 +169,13 @@ if __name__ == '__main__':
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[batch_num]
                 
-                clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
-                clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
+                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
+                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:
-                    clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose.float(), noise_amount_clothing.float(), noise_amount_masked.float()
+                    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose_vector.float(), pose_matrix.float(), noise_amount_clothing.float(), noise_amount_masked.float()
                 else:
                     if not c.USE_BFLOAT16:
-                        clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.float16), mask_coords, masked_aug.to(torch.float16), person.to(torch.float16), pose.to(torch.float16), noise_amount_clothing.to(torch.float16), noise_amount_masked.to(torch.float16)
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.float16), mask_coords, masked_aug.to(torch.float16), person.to(torch.float16), pose_vector.to(torch.float16), pose_matrix.to(torch.float16), noise_amount_clothing.to(torch.float16), noise_amount_masked.to(torch.float16)
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
@@ -213,7 +193,7 @@ if __name__ == '__main__':
                 #     add_hooks(model_main, base_name='main_', batch_num=batch_num)
                 #     add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
                 with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
-                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
+                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
                     
                 running_loss += loss.item()
                 
@@ -329,19 +309,19 @@ if __name__ == '__main__':
                 # Save generated images.
                 if batch_num % c.EVAL_FREQUENCY == 0:
                     try:
-                        clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
                     except StopIteration:
                         valid_dataloader_iterator = iter(valid_dataloader)
-                        clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
-                    # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                    # clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
                     num_eval_samples = min(5, clothing_aug.shape[0])
                     if not c.USE_AMP:
-                        inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+                        inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose_vector[:num_eval_samples].cuda().float(), pose_matrix[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
                     else:
                         if not c.USE_BFLOAT16:
-                            inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.float16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.float16), person[:num_eval_samples].cuda().to(torch.float16), pose[:num_eval_samples].cuda().to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.float16), noise_amount_masked[:num_eval_samples].cuda().to(torch.float16)]
+                            inputs = [clothing_aug[:num_eval_samples].cuda().to(torch.float16), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().to(torch.float16), person[:num_eval_samples].cuda().to(torch.float16), pose_vector[:num_eval_samples].cuda().to(torch.float16), pose_matrix[:num_eval_samples].cuda().to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().to(torch.float16), noise_amount_masked[:num_eval_samples].cuda().to(torch.float16)]
                         else:
-                            inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
+                            inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose_vector[:num_eval_samples].cuda(), pose_matrix[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
                         
                     val_loss = 0
                     for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
@@ -363,7 +343,7 @@ if __name__ == '__main__':
                                 masked_img = (((masked_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 person_img = (((person[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
                                 clothing_img = (((clothing_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose[i], return_value=True)
+                                pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose_vector[i], return_value=True)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)
                                 cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_clothing.png'), clothing_img)

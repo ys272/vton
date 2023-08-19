@@ -113,8 +113,6 @@ if __name__ == '__main__':
         
         for g in optimizer.param_groups:
             g['lr'] = initial_learning_rate
-            # TODO: Remove this!
-            # g['eps'] = 1e-10
 
         used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}'
         print(used_checkpoint_msg)
@@ -192,13 +190,15 @@ if __name__ == '__main__':
                 #     hooks = {}
                 #     add_hooks(model_main, base_name='main_', batch_num=batch_num)
                 #     add_hooks(model_aux, base_name='aux_', batch_num=batch_num)
+                
+                apply_cfg = random.random() < 0.1 and batch_num % 1005 != 0
                 with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
-                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, loss_type="l1")
+                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, loss_type="l1", apply_cfg=apply_cfg)
                     
                 running_loss += loss.item()
                 
                 if loss == 0 or loss > 1e10:
-                    loss_oob_msg = f'----------------------------Loss is OOB: {loss}, for{sample_original_string_id}, {sample_unique_string_id}, {t}'
+                    loss_oob_msg = f'----------------------------Loss is OOB: {loss}, for {sample_original_string_id}, {sample_unique_string_id}, {t}'
                     print(loss_oob_msg)
                     log_file.write(loss_oob_msg+'\n')
                 
@@ -214,44 +214,44 @@ if __name__ == '__main__':
                         scaler.update()
                     else:
                         optimizer.step()
-                
+                            
                 if batch_num % 1005 == 0:
                     log_file.flush()
-                    # for name, param in model_main.named_parameters():
-                    #     tb.add_histogram('main_'+name, param, batch_num)
-                    #     mean = torch.mean(param.grad)
-                    #     if not torch.isnan(mean):
-                    #         tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
-                    #         if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                    #             min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                    #             max_grad = max(max_grad, mean)
-                    #             if torch.abs(mean) < 1e-8:
-                    #                 very_low_gradients.add('main_'+name)
-                    #     else:
-                    #         print(f'NAN!!!------------------- {name},{batch_num}')
+                    for name, param in model_main.named_parameters():
+                        tb.add_histogram('main_'+name, param, batch_num)
+                        mean = torch.mean(param.grad)
+                        if not torch.isnan(mean):
+                            tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                max_grad = max(max_grad, mean)
+                                if torch.abs(mean) < 1e-8:
+                                    very_low_gradients.add('main_'+name)
+                        else:
+                            print(f'NAN!!!------------------- {name},{batch_num}')
                         
-                    # for name, param in model_aux.named_parameters():
-                    #     tb.add_histogram('aux_'+name, param, batch_num)
-                    #     mean = torch.mean(param.grad)
-                    #     if not torch.isnan(mean):
-                    #         tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
-                    #         if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                    #             min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                    #             max_grad = max(max_grad, mean)
-                    #             if torch.abs(mean) < 1e-8:
-                    #                 very_low_gradients.add('aux_'+name)
-                    #     else:
-                    #         print(f'NAN!!!------------------- {name},{batch_num}')
+                    for name, param in model_aux.named_parameters():
+                        tb.add_histogram('aux_'+name, param, batch_num)
+                        mean = torch.mean(param.grad)
+                        if not torch.isnan(mean):
+                            tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                max_grad = max(max_grad, mean)
+                                if torch.abs(mean) < 1e-8:
+                                    very_low_gradients.add('aux_'+name)
+                        else:
+                            print(f'NAN!!!------------------- {name},{batch_num}')
                         
                 #     for name, hook in hooks.items():
                 #         hook.remove()
                 
                 # for name,param in model_main.named_parameters():
-                #     if not torch.isfinite(torch.mean(param.grad)):
+                #     if param.grad is None or not torch.isfinite(torch.mean(param.grad)):
                 #         print(f'!!!!!!!!!!!!!!!!!!NAN!!!main {name}')
                 
                 # for name,param in model_aux.named_parameters():
-                #     if not torch.isfinite(torch.mean(param.grad)):
+                #     if param.grad is None or not torch.isfinite(torch.mean(param.grad)):
                 #         print(f'!!!!!!!!!!!!!!!!!!NAN!!!aux {name}')
                         
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:

@@ -361,6 +361,7 @@ class Unet_Clothing(nn.Module):
             h_idx -= 1
             x = res_block(x, film_vector)
             h.append(x)
+            # cross_attns.append(x)
         cross_attns.append(x)
                 
         for level_idx in range(len(self.ups)):
@@ -372,6 +373,7 @@ class Unet_Clothing(nn.Module):
                 h_idx -=1
                 x = res_block(x, film_vector)
                 h.append(x)
+                # cross_attns.append(x)
         cross_attns.append(x)
 
         return cross_attns

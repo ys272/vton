@@ -250,7 +250,7 @@ class CrossAttention(nn.Module):
         # # linear projection, creating `dim_head` values for each head; for keys and values.
         # self.to_k = nn.Conv2d(kv_dim, hidden_dim, 1, bias=False)
         # project attention values back to original dimension so it can be added to original values.
-        self.to_out = nn.Conv2d(hidden_dim, q_dim, 1)
+        self.to_out = nn.Conv2d(hidden_dim, q_dim, 1, bias=False)
 
     def forward(self, x_q, x_kv):
         b, c, h, w = x_q.shape
@@ -433,7 +433,7 @@ class TrainerHelper:
         return batch_num - self.last_accumulation_rate_increase
 
 
-def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1"):
+def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1", apply_cfg=False):
     if noise is None:
         noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
 
@@ -442,7 +442,9 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     else:
         x_noisy = q_sample(person, t=t, noise=noise)
     
-    if c.USE_CLASSIFIER_FREE_GUIDANCE and random.random() < 0.1:
+    if c.USE_CLASSIFIER_FREE_GUIDANCE and apply_cfg:
+        # cross_attns = [len(model_aux.mid2) * [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE)], (len(model_aux.ups[0])-1) * [torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]]
+        # cross_attns = [*cross_attns[0],*cross_attns[1]]
         cross_attns = [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]
         mask_coords = torch.zeros_like(mask_coords)
         masked_aug = torch.zeros_like(masked_aug)

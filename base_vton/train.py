@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '17-August-21:52_MIN_loss.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '19-August-10:59_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -217,31 +217,31 @@ if __name__ == '__main__':
                 
                 if batch_num % 1005 == 0:
                     log_file.flush()
-                    for name, param in model_main.named_parameters():
-                        tb.add_histogram('main_'+name, param, batch_num)
-                        mean = torch.mean(param.grad)
-                        if not torch.isnan(mean):
-                            tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
-                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                                max_grad = max(max_grad, mean)
-                                if torch.abs(mean) < 1e-8:
-                                    very_low_gradients.add('main_'+name)
-                        else:
-                            print(f'NAN!!!------------------- {name},{batch_num}')
+                    # for name, param in model_main.named_parameters():
+                    #     tb.add_histogram('main_'+name, param, batch_num)
+                    #     mean = torch.mean(param.grad)
+                    #     if not torch.isnan(mean):
+                    #         tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+                    #         if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                    #             min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                    #             max_grad = max(max_grad, mean)
+                    #             if torch.abs(mean) < 1e-8:
+                    #                 very_low_gradients.add('main_'+name)
+                    #     else:
+                    #         print(f'NAN!!!------------------- {name},{batch_num}')
                         
-                    for name, param in model_aux.named_parameters():
-                        tb.add_histogram('aux_'+name, param, batch_num)
-                        mean = torch.mean(param.grad)
-                        if not torch.isnan(mean):
-                            tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
-                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                                max_grad = max(max_grad, mean)
-                                if torch.abs(mean) < 1e-8:
-                                    very_low_gradients.add('aux_'+name)
-                        else:
-                            print(f'NAN!!!------------------- {name},{batch_num}')
+                    # for name, param in model_aux.named_parameters():
+                    #     tb.add_histogram('aux_'+name, param, batch_num)
+                    #     mean = torch.mean(param.grad)
+                    #     if not torch.isnan(mean):
+                    #         tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                    #         if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                    #             min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                    #             max_grad = max(max_grad, mean)
+                    #             if torch.abs(mean) < 1e-8:
+                    #                 very_low_gradients.add('aux_'+name)
+                    #     else:
+                    #         print(f'NAN!!!------------------- {name},{batch_num}')
                         
                 #     for name, hook in hooks.items():
                 #         hook.remove()

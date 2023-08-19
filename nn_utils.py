@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 import random
 import os
 import math
@@ -441,12 +443,13 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
         x_noisy = q_sample(person, t=t, noise=noise)
     
     if c.USE_CLASSIFIER_FREE_GUIDANCE and random.random() < 0.1:
-        cross_attns = [torch.zeros((c.BATCH_SIZE, 512, 16, 11), device=c.DEVICE), torch.zeros((c.BATCH_SIZE, 512, 32, 22), device=c.DEVICE)]
+        cross_attns = [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]
         mask_coords = torch.zeros_like(mask_coords)
         masked_aug = torch.zeros_like(masked_aug)
         pose_vector = torch.zeros_like(pose_vector)
     else:
         cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+                                
     x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
     alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2

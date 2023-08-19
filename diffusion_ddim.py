@@ -113,7 +113,7 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     
 
 @torch.no_grad()
-def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1):
+def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1, eval_mode=False):
   '''
   Predict x_t1 (x at timestep t-1) using DDIM.
   If eta=0, it's deterministic.
@@ -123,10 +123,23 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   
   clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, _, _, noise_amount_clothing, noise_amount_masked = inputs
   with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
-    # aux_input = torch.cat((mask_coords.to(clothing_aug.dtype).unsqueeze(1), clothing_aug), dim=1)
-    cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
-    x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
-    model_output = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
+    if c.USE_CLASSIFIER_FREE_GUIDANCE and eval_mode:
+        cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
+        model_output_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
+        
+        cross_attns = [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]
+        mask_coords = torch.zeros_like(mask_coords)
+        masked_aug = torch.zeros_like(masked_aug)
+        pose_vector = torch.zeros_like(pose_vector)
+        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
+        model_output_not_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
+        
+        model_output = torch.lerp(model_output_not_conditional, model_output_conditional, 2)
+    else:
+        cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
+        model_output = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
   
   alphas_cumprod_t = extract(alphas_cumprod, t, x_t.shape)
   alphas_cumprod_prev_t = extract(alphas_cumprod_prev, t, x_t.shape)
@@ -152,14 +165,14 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
 
 
 @torch.no_grad()
-def p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None):
+def p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None, eval_mode=False):
     if sampler == 'ddpm':
         reverse_sampler_func = p_sample_ddpm
     elif sampler == 'ddim':
         if eta is not None:
-            reverse_sampler_func = partial(p_sample_ddim, eta=eta)
+            reverse_sampler_func = partial(p_sample_ddim, eta=eta, eval_mode=eval_mode)
         else:
-            reverse_sampler_func = p_sample_ddim
+            reverse_sampler_func = partial(p_sample_ddim, eval_mode=eval_mode)
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
     img_initially_noise = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR
@@ -183,9 +196,9 @@ def show_example_noise_sequence(imgs):
         cv2.imwrite(f'/home/yoni/Desktop/f/other/debugging/noising_examples/{img_idx}_0_nonoise.png', ((img.cpu().numpy() + 1) * 127.5).astype(np.uint8)[::-1].transpose(1,2,0))
 
 
-def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None):
-    img_sequences = p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None)
-    clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = inputs
+def call_sampler_simple(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, show_all=False, eta=None, eval_mode=False):
+    img_sequences = p_sample_loop(model_main, model_aux, inputs, shape, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None, eval_mode=eval_mode)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = inputs
     if not show_all:
         for img_idx,img in enumerate(img_sequences[-1]):
             img = denormalize_img(img)

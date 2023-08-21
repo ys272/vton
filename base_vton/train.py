@@ -77,10 +77,10 @@ if __name__ == '__main__':
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
     initial_learning_rate = 1e-4
-    
-    # initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-5
-    # num_LR_decay_cycles = 10000
+        
+    # initial_learning_rate = 0 # Use this when applying 1cycle policy.
+    # final_learning_rate = 1e-4
+    # num_LR_decay_cycles = 20000
     # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '19-August-10:59_MIN_loss.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-August-14:24_MIN_loss_after_10k.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -114,7 +114,7 @@ if __name__ == '__main__':
         for g in optimizer.param_groups:
             g['lr'] = initial_learning_rate
 
-        used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}'
+        used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}, accumulation rate: {accumulation_rate}, batch num {batch_num}'
         print(used_checkpoint_msg)
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
@@ -155,8 +155,9 @@ if __name__ == '__main__':
                     min_grad = float('inf')
                     max_grad = 0
                     very_low_gradients = set()
+
                 # Code for finding maximum learning rate.
-                # if batch_num%100==0 and batch_num != 0 and initial_learning_rate < 0.01:
+                # if batch_num%400==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = initial_learning_rate
@@ -166,7 +167,7 @@ if __name__ == '__main__':
                 # if batch_num < num_LR_decay_cycles:
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = learning_rates[batch_num]
-                
+                               
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:
@@ -283,7 +284,6 @@ if __name__ == '__main__':
                             accumulation_rate *= 2
                             trainer_helper.update_last_accumulation_rate_increase(batch_num)
                             scaler = torch.cuda.amp.GradScaler()
-                            # optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
                             batch_num_last_accumulate_rate_update = batch_num
                             accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
                             log_file.write(accumulation_msg)

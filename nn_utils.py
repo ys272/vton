@@ -406,6 +406,11 @@ class TrainerHelper:
                 
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
         self.backprop_batch_num += 1
+        
+        # if batch_num >= 10000 and batch_num <=10035:
+        #     save_suffix = f'_10K.pth'
+        #     self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+        
         if loss < self.min_loss:
             self.min_loss = loss
             self.min_loss_batch_num = self.backprop_batch_num

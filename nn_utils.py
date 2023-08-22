@@ -384,7 +384,7 @@ class TrainerHelper:
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
         self.last_accumulation_rate_increase = 0
-        # self.backprop_batch_num = backprop_batch_num
+        self.backprop_batch_num = backprop_batch_num
         self.last_save_batch_num = last_save_batch_num
         
     def save(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):

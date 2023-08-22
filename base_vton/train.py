@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-August-17:06_67072_B32_LR1E-5.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '22-August-15:06_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -156,11 +156,12 @@ if __name__ == '__main__':
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                if batch_num <= num_LR_decay_cycles:
+                if batch_num < num_LR_decay_cycles:
                     for g in optimizer.param_groups:
                         g['lr'] = learning_rates[batch_num]
                 if batch_num % 2000 == 0:
                     print(f'learning rate is now {g["lr"]}')
+                    
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:

@@ -384,7 +384,7 @@ class TrainerHelper:
         self.human_readable_timestamp = human_readable_timestamp
         self.last_learning_rate_reduction = 0
         self.last_accumulation_rate_increase = 0
-        self.backprop_batch_num = backprop_batch_num
+        # self.backprop_batch_num = backprop_batch_num
         self.last_save_batch_num = last_save_batch_num
         
     def save(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
@@ -405,15 +405,12 @@ class TrainerHelper:
         }, save_path)
                 
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
-        self.backprop_batch_num += 1
-        
-        # if batch_num >= 10000 and batch_num <=10035:
-        #     save_suffix = f'_10K.pth'
-        #     self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+        # self.backprop_batch_num += 1
         
         if loss < self.min_loss:
             self.min_loss = loss
-            self.min_loss_batch_num = self.backprop_batch_num
+            # self.min_loss_batch_num = self.backprop_batch_num
+            self.min_loss_batch_num = self.batch_num
             if batch_num >= save_from_this_batch_num:
                 save_suffix = f'_MIN_loss.pth'
                 self.last_save_batch_num = batch_num
@@ -422,7 +419,8 @@ class TrainerHelper:
             save_suffix = f'_{batch_num}_normal_loss_{loss:.3f}.pth'
             self.last_save_batch_num = batch_num
             self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
-        return self.backprop_batch_num - self.min_loss_batch_num
+        # return self.backprop_batch_num - self.min_loss_batch_num
+        return self.batch_num - self.min_loss_batch_num
     
     
     def update_last_learning_rate_reduction(self, batch_num):

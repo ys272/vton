@@ -58,30 +58,30 @@ if __name__ == '__main__':
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
     init_dim = 128
     # hyperparams for 's'
-    # level_dims_main = (128, 256, 512, 512)
-    # level_dims_aux = (128, 256, 512, 512)
-    # level_attentions = (False, False, True)
-    # level_repetitions_main = (2,2,4,4)
-    # level_repetitions_aux = (2,2,4,4)
+    level_dims_main = (128, 256, 512, 640)
+    level_dims_aux = (128, 256, 512, 640)
+    level_attentions = (False, False, True)
+    level_repetitions_main = (2,2,4,4)
+    level_repetitions_aux = (2,2,4,4)
     
     # hyperparams for 't'    
-    level_dims_main = (128, 512, 512)
-    level_dims_aux = (128, 512, 512)
-    level_attentions = (False, True)
-    level_repetitions_main = (2,4,4)
-    level_repetitions_aux = (2,4,4)
+    # level_dims_main = (128, 512, 512)
+    # level_dims_aux = (128, 512, 512)
+    # level_attentions = (False, True)
+    # level_repetitions_main = (2,4,4)
+    # level_repetitions_aux = (2,4,4)
     
     model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    initial_learning_rate = 1e-4
+    # initial_learning_rate = 1e-4
         
-    # initial_learning_rate = 0 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-4
-    # num_LR_decay_cycles = 20000
-    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
+    initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
+    final_learning_rate = 1e-4
+    num_LR_decay_cycles = 20000
+    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
     scaler = torch.cuda.amp.GradScaler()
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-August-14:24_MIN_loss_after_10k.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '20-August-17:06_67072_B32_LR1E-5.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -164,9 +164,9 @@ if __name__ == '__main__':
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                # if batch_num < num_LR_decay_cycles:
-                #     for g in optimizer.param_groups:
-                #         g['lr'] = learning_rates[batch_num]
+                if batch_num <= num_LR_decay_cycles:
+                    for g in optimizer.param_groups:
+                        g['lr'] = learning_rates[batch_num]
                                
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
@@ -216,7 +216,7 @@ if __name__ == '__main__':
                     else:
                         optimizer.step()
                             
-                if batch_num % 1005 == 0:
+                if batch_num % 10005 == 0:
                     log_file.flush()
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
@@ -273,7 +273,7 @@ if __name__ == '__main__':
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
-                    if num_batches_since_min_loss > 7500:
+                    if num_batches_since_min_loss > 5000:
                         if num_batches_since_min_loss > 100000:
                             termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
                             log_file.write(termination_msg+'\n')

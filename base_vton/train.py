@@ -56,20 +56,12 @@ if __name__ == '__main__':
     
     img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
-    init_dim = 128
-    # hyperparams for 's'
-    level_dims_main = (128, 256, 512, 640)
-    level_dims_aux = (128, 256, 512, 640)
-    level_attentions = (False, False, True)
-    level_repetitions_main = (2,2,4,4)
-    level_repetitions_aux = (2,2,4,4)
-    
-    # hyperparams for 't'    
-    # level_dims_main = (128, 512, 512)
-    # level_dims_aux = (128, 512, 512)
-    # level_attentions = (False, True)
-    # level_repetitions_main = (2,4,4)
-    # level_repetitions_aux = (2,4,4)
+    init_dim = c.MODELS_INIT_DIM
+    level_dims_main = c.MODELS_PARAMS[c.IMAGE_SIZE][0]
+    level_dims_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][1]
+    level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
+    level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
+    level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
     
     model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
@@ -167,7 +159,8 @@ if __name__ == '__main__':
                 if batch_num <= num_LR_decay_cycles:
                     for g in optimizer.param_groups:
                         g['lr'] = learning_rates[batch_num]
-                               
+                if batch_num % 2000 == 0:
+                    print(f'learning rate is now {g["lr"]}')
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:

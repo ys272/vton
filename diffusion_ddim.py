@@ -128,9 +128,10 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
         x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
         model_output_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
         
-        # cross_attns = [len(model_aux.mid2) * [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE)], (len(model_aux.ups[0])-1) * [torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]]
+        level_dims_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][1]
+        # cross_attns = [len(model_aux.mid2) * [torch.zeros((clothing_aug.shape[0], level_dims_aux[-1], 16, 11), device=c.DEVICE)], (len(model_aux.ups[0])-1) * [torch.zeros((clothing_aug.shape[0], level_dims_aux[-2], 32, 22), device=c.DEVICE)]]
         # cross_attns = [*cross_attns[0],*cross_attns[1]]
-        cross_attns = [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]
+        cross_attns = [torch.zeros((clothing_aug.shape[0], level_dims_aux[-1], 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], level_dims_aux[-2], 32, 22), device=c.DEVICE)]
         mask_coords = torch.zeros_like(mask_coords)
         masked_aug = torch.zeros_like(masked_aug)
         pose_vector = torch.zeros_like(pose_vector)

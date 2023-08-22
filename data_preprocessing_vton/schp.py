@@ -134,7 +134,7 @@ def extract_person_without_clothing(filepath_atr: str, img:np.ndarray = None, cl
   
 
 
-def extract_person_without_clothing_old(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
+def extract_person_without_clothing_google(filepath_atr: str, img:np.ndarray = None, clothing_types = [4, 7], stats=False):
   import torch
   '''
   Create a bounding box/rectangle that covers the entire area where the

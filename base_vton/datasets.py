@@ -196,7 +196,7 @@ def create_datasets():
     end_time = time.time()
     print(f'Finished loading data: {end_time-start_time}')
     
-    # return train_dataloader, valid_dataloader, test_dataloader
+    return train_dataloader, valid_dataloader, test_dataloader
 
     for batch in train_dataloader:
         pass

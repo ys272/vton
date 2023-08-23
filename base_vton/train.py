@@ -86,8 +86,8 @@ if __name__ == '__main__':
     last_save_batch_num = 0
 
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '22-August-15:06_MIN_loss.pth'))
+    if 1:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '22-August-18:20_116878_normal_loss_0.047.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -159,8 +159,6 @@ if __name__ == '__main__':
                 if batch_num < num_LR_decay_cycles:
                     for g in optimizer.param_groups:
                         g['lr'] = learning_rates[batch_num]
-                if batch_num % 2000 == 0:
-                    print(f'learning rate is now {g["lr"]}')
                     
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
@@ -268,11 +266,11 @@ if __name__ == '__main__':
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
-                        if num_batches_since_min_loss > 100000:
-                            termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
-                            log_file.write(termination_msg+'\n')
-                            log_file.flush()
-                            sys.exit(termination_msg)
+                        # if num_batches_since_min_loss > 100000:
+                        #     termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
+                        #     log_file.write(termination_msg+'\n')
+                        #     log_file.flush()
+                        #     sys.exit(termination_msg)
                         # If the loss hasn't been reduced for this long, increase the accumulation rate.
                         if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
                             accumulation_rate *= 2

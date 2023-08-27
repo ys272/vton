@@ -231,6 +231,19 @@ def extract_person_without_clothing_google(filepath_atr: str, img:np.ndarray = N
   mask_discard_final = np.zeros_like(atr_argmaxes, dtype=np.uint8)
   mask_discard_final[top_y_discard:bottom_y_discard, leftmost_x_discard:rightmost_x_discard] = 1
 
+  # Use lip to see if there's a coat present. If it is (and it is more common than the upper clothes, implying that
+  # it is probably the target clothing), only mask out the coat, but not the upper clothes.
+  filepath_lip = filepath_atr.replace('atr_person', 'lip_person')
+  logits = np.load(filepath_lip, allow_pickle=True)
+  lip_argmaxes = np.argmax(logits, axis=-1)
+  num_coat_pixels = np.count_nonzero(lip_argmaxes==7)
+  if num_coat_pixels > NUM_PIXELS_COAT_THRESHOLD:
+    mask_upper_clothes = lip_argmaxes==5
+    num_upper_clothes_pixels = np.count_nonzero(mask_upper_clothes)
+    if num_coat_pixels > num_upper_clothes_pixels:
+      # Do not discard pixels belonging to upper clothes.
+      mask_discard_final[mask_upper_clothes] = 0
+      
   if img is not None:    
     # TODO: Try adding bag (index=16)
     atr_alone = [1,3] # hat, sunglasses

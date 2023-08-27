@@ -4,7 +4,7 @@ import cv2
 import config as c
 from utils import resize_img, count_lines
 from data_preprocessing_vton.pose import PoseModel
-from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, extract_clothing, detect_person
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, extract_clothing, detect_person, extract_person_without_clothing_google
 from random import random
 import multiprocessing
 import pickle
@@ -227,7 +227,7 @@ def preprocess_schp(clothing_types:list):
             continue
           original_img = cv2.imread(os.path.join(person_original_dir, 'm', img_filename))
           # retval = extract_person_without_clothing(argmaxes, img=original_img, stats=True)
-          retval = extract_person_without_clothing(filepath, img=original_img, clothing_types=clothing_types, stats=True)
+          retval = extract_person_without_clothing_google(filepath, img=original_img, clothing_types=clothing_types, stats=True)
           if retval is None:
             log_file.write(f'no clothing, {filename}\n')
             file_to_remove = os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png')
@@ -236,20 +236,20 @@ def preprocess_schp(clothing_types:list):
               save_problematic_data(training_sample_id, original_img, schp_img=schp_img)
             
             # Delete the data that was saved so far for this training sample, as it cannot be used without the schp masking.
-            person_original_img_save_path_large = os.path.join(person_original_dir, 'l', img_filename)
-            person_original_img_save_path_medium = os.path.join(person_original_dir, 'm', img_filename)
-            clothing_img_save_path = os.path.join(clothing_dir, f'{training_sample_id}.jpg')
-            pose_keypoints_save_path = os.path.join(pose_keypoints_dir, 'm', f'{training_sample_id}.txt')
-            if os.path.exists(person_original_img_save_path_large):
-                os.remove(person_original_img_save_path_large)
-            if os.path.exists(person_original_img_save_path_medium):
-                os.remove(person_original_img_save_path_medium)
-            if os.path.exists(clothing_img_save_path):
-                os.remove(clothing_img_save_path)
-            else:
-                print(f'not exists{clothing_img_save_path}')
-            if os.path.exists(pose_keypoints_save_path):
-                os.remove(pose_keypoints_save_path)
+            # person_original_img_save_path_large = os.path.join(person_original_dir, 'l', img_filename)
+            # person_original_img_save_path_medium = os.path.join(person_original_dir, 'm', img_filename)
+            # clothing_img_save_path = os.path.join(clothing_dir, f'{training_sample_id}.jpg')
+            # pose_keypoints_save_path = os.path.join(pose_keypoints_dir, 'm', f'{training_sample_id}.txt')
+            # if os.path.exists(person_original_img_save_path_large):
+            #     os.remove(person_original_img_save_path_large)
+            # if os.path.exists(person_original_img_save_path_medium):
+            #     os.remove(person_original_img_save_path_medium)
+            # if os.path.exists(clothing_img_save_path):
+            #     os.remove(clothing_img_save_path)
+            # else:
+            #     print(f'not exists{clothing_img_save_path}')
+            # if os.path.exists(pose_keypoints_save_path):
+            #     os.remove(pose_keypoints_save_path)
             continue
         
           # If we successfully extracted the person from the image, save the data.
@@ -361,7 +361,7 @@ def preprocess():
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(clothing_dir, 'm'), schp_raw_output_dir_atr_clothing), kwargs={'model':'atr'}),
       #  multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
       # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
-      #  multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
+       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # upper-clothes,dress,coat,jumpsuit
     ]
     for process in processes:
         process.start()

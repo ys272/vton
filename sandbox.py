@@ -1,3 +1,4 @@
+import shutil
 import os
 import numpy as np
 import cv2
@@ -8,7 +9,6 @@ import pickle
 import config as c
 from data_preprocessing_vton.pose import PoseModel
 from data_preprocessing_vton.schp import extract_person_without_clothing
-import torch
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -56,3 +56,33 @@ for d in os.listdir(base_dir_src):
 #   combined_image[:height, width:] = mask
 #   combined_image[height:, :width] = person
 #   cv2.imwrite(os.path.join(dir_name, filename+'.jpg'), combined_image)
+  # cv2.imwrite(os.path.join(dir_name, filename+'_c.jpg'), clothing)
+  # cv2.imwrite(os.path.join(dir_name, filename+'_m.jpg'), mask)
+  # cv2.imwrite(os.path.join(dir_name, filename+'_p.jpg'), person)
+  # if i >=12:
+  #   break
+
+
+# raw_data_dir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/'
+# quarantined_data_dir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/quarantined'
+# filtered_data_dir = '/home/yoni/Desktop/f/data/filtering/sp2p DONE'
+# subdirs = ['clothing', 'mask_coordinates', 'person_original', 'person_with_masked_clothing', 'pose_keypoints']
+
+# s = set()
+# for directory in os.listdir(filtered_data_dir):
+#   for filename in os.listdir(os.path.join(filtered_data_dir, directory)):
+#     sample_id = filename.split('.')[0]
+#     s.add(sample_id)
+
+# for subdir in subdirs:
+#   counter=0
+#   for filename in os.listdir(os.path.join(raw_data_dir, subdir, 'm')):
+#     file_id = filename.split('.')[0]
+#     if file_id not in s:
+#       counter += 1
+#       new_dir = os.path.join(quarantined_data_dir, subdir, 'm')
+#       os.makedirs(new_dir,exist_ok=True)
+#       shutil.copy(os.path.join(raw_data_dir, subdir, 'm', filename), os.path.join(new_dir, filename))
+#       os.remove(os.path.join(raw_data_dir, subdir, 'm', filename))
+      
+#   print(subdir, counter)

@@ -387,7 +387,7 @@ class TrainerHelper:
         self.backprop_batch_num = backprop_batch_num
         self.last_save_batch_num = last_save_batch_num
         
-    def save(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
+    def save(self, min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
         save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + suffix)
         torch.save({
             'batch_num': batch_num,
@@ -396,7 +396,7 @@ class TrainerHelper:
             'model_aux_state_dict': model_aux.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scaler_state_dict': scaler.state_dict(),
-            'loss': loss,
+            'loss': min_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
             'accumulation_rate': accumulation_rate,
             'last_accumulation_rate_increase': self.last_accumulation_rate_increase,
@@ -405,19 +405,22 @@ class TrainerHelper:
         }, save_path)
                 
     def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
-        self.backprop_batch_num += 1
+        # self.backprop_batch_num += 1
+        
         if loss < self.min_loss:
             self.min_loss = loss
-            self.min_loss_batch_num = self.backprop_batch_num
+            # self.min_loss_batch_num = self.backprop_batch_num
+            self.min_loss_batch_num = batch_num
             if batch_num >= save_from_this_batch_num:
                 save_suffix = f'_MIN_loss.pth'
                 self.last_save_batch_num = batch_num
-                self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+                self.save(self.min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
         elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > 10000:
             save_suffix = f'_{batch_num}_normal_loss_{loss:.3f}.pth'
             self.last_save_batch_num = batch_num
-            self.save(loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
-        return self.backprop_batch_num - self.min_loss_batch_num
+            self.save(self.min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+        # return self.backprop_batch_num - self.min_loss_batch_num
+        return batch_num - self.min_loss_batch_num
     
     
     def update_last_learning_rate_reduction(self, batch_num):
@@ -443,9 +446,10 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
         x_noisy = q_sample(person, t=t, noise=noise)
     
     if c.USE_CLASSIFIER_FREE_GUIDANCE and apply_cfg:
-        # cross_attns = [len(model_aux.mid2) * [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE)], (len(model_aux.ups[0])-1) * [torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]]
+        level_dims_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][1]
+        # cross_attns = [len(model_aux.mid2) * [torch.zeros((clothing_aug.shape[0], level_dims_aux[-1], 16, 11), device=c.DEVICE)], (len(model_aux.ups[0])-1) * [torch.zeros((clothing_aug.shape[0], level_dims_aux[-2], 32, 22), device=c.DEVICE)]]
         # cross_attns = [*cross_attns[0],*cross_attns[1]]
-        cross_attns = [torch.zeros((clothing_aug.shape[0], 512, 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], 512, 32, 22), device=c.DEVICE)]
+        cross_attns = [torch.zeros((clothing_aug.shape[0], level_dims_aux[-1], 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], level_dims_aux[-2], 32, 22), device=c.DEVICE)]
         mask_coords = torch.zeros_like(mask_coords)
         masked_aug = torch.zeros_like(masked_aug)
         pose_vector = torch.zeros_like(pose_vector)

@@ -4,7 +4,7 @@ import cv2
 import config as c
 from utils import resize_img
 from data_preprocessing_vton.pose import PoseModel
-from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, detect_person
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, detect_person, extract_person_without_clothing_google
 from random import random
 import multiprocessing
 import pickle
@@ -128,7 +128,7 @@ def preprocess_schp(clothing_types:list):
               continue
           original_img = cv2.imread(os.path.join(person_original_dir, 'm', img_filename))
           person_img = np.copy(original_img)
-          retval = extract_person_without_clothing(filepath, img=original_img, stats=True)
+          retval = extract_person_without_clothing_google(filepath, img=original_img, stats=True)
           if retval is None:
             log_file.write(f'no clothing, {filename}\n')
             # Delete the data that was saved so far for this training sample, as it cannot be used without the schp masking.

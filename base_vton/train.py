@@ -56,32 +56,24 @@ if __name__ == '__main__':
     
     img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
     img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
-    init_dim = 128
-    # hyperparams for 's'
-    # level_dims_main = (128, 256, 512, 512)
-    # level_dims_aux = (128, 256, 512, 512)
-    # level_attentions = (False, False, True)
-    # level_repetitions_main = (2,2,4,4)
-    # level_repetitions_aux = (2,2,4,4)
-    
-    # hyperparams for 't'    
-    level_dims_main = (128, 512, 512)
-    level_dims_aux = (128, 512, 512)
-    level_attentions = (False, True)
-    level_repetitions_main = (2,4,4)
-    level_repetitions_aux = (2,4,4)
+    init_dim = c.MODELS_INIT_DIM
+    level_dims_main = c.MODELS_PARAMS[c.IMAGE_SIZE][0]
+    level_dims_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][1]
+    level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
+    level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
+    level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
     
     model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-    initial_learning_rate = 1e-4
-    
-    # initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
-    # final_learning_rate = 1e-5
-    # num_LR_decay_cycles = 10000
-    # learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
+    # initial_learning_rate = 1e-4
+        
+    initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
+    final_learning_rate = 1e-4
+    num_LR_decay_cycles = 20000
+    learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
     scaler = torch.cuda.amp.GradScaler()
@@ -95,7 +87,7 @@ if __name__ == '__main__':
 
     # Load model from checkpoint.
     if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '19-August-10:59_MIN_loss.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '27-August-17:12_1061276_normal_loss_0.039.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -114,7 +106,7 @@ if __name__ == '__main__':
         for g in optimizer.param_groups:
             g['lr'] = initial_learning_rate
 
-        used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}'
+        used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}, accumulation rate: {accumulation_rate}, batch num {batch_num}'
         print(used_checkpoint_msg)
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
@@ -155,18 +147,19 @@ if __name__ == '__main__':
                     min_grad = float('inf')
                     max_grad = 0
                     very_low_gradients = set()
+
                 # Code for finding maximum learning rate.
-                # if batch_num%100==0 and batch_num != 0 and initial_learning_rate < 0.01:
+                # if batch_num%400==0 and batch_num != 0 and initial_learning_rate < 0.01:
                 #     initial_learning_rate *= math.sqrt(10) 
                 #     for g in optimizer.param_groups:
                 #         g['lr'] = initial_learning_rate
                 #     print(f'mini_batch_counter {batch_num} lr: {initial_learning_rate}')
                 
                 # Code for applying 1cycle policy.
-                # if batch_num < num_LR_decay_cycles:
-                #     for g in optimizer.param_groups:
-                #         g['lr'] = learning_rates[batch_num]
-                
+                if batch_num < num_LR_decay_cycles:
+                    for g in optimizer.param_groups:
+                        g['lr'] = learning_rates[batch_num]
+                    
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
                 if not c.USE_AMP:
@@ -215,7 +208,7 @@ if __name__ == '__main__':
                     else:
                         optimizer.step()
                             
-                if batch_num % 1005 == 0:
+                if batch_num % 10005 == 0:
                     log_file.flush()
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
@@ -272,18 +265,17 @@ if __name__ == '__main__':
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
                     num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
-                    if num_batches_since_min_loss > 7500:
-                        if num_batches_since_min_loss > 100000:
-                            termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
-                            log_file.write(termination_msg+'\n')
-                            log_file.flush()
-                            sys.exit(termination_msg)
+                    if num_batches_since_min_loss > 5000:
+                        # if num_batches_since_min_loss > 100000:
+                        #     termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
+                        #     log_file.write(termination_msg+'\n')
+                        #     log_file.flush()
+                        #     sys.exit(termination_msg)
                         # If the loss hasn't been reduced for this long, increase the accumulation rate.
                         if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
                             accumulation_rate *= 2
                             trainer_helper.update_last_accumulation_rate_increase(batch_num)
                             scaler = torch.cuda.amp.GradScaler()
-                            # optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
                             batch_num_last_accumulate_rate_update = batch_num
                             accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
                             log_file.write(accumulation_msg)
@@ -313,7 +305,6 @@ if __name__ == '__main__':
                     except StopIteration:
                         valid_dataloader_iterator = iter(valid_dataloader)
                         clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
-                    # clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(train_dataloader))
                     num_eval_samples = min(5, clothing_aug.shape[0])
                     if not c.USE_AMP:
                         inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda().float(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose_vector[:num_eval_samples].cuda().float(), pose_matrix[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]

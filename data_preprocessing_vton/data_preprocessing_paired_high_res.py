@@ -4,7 +4,7 @@ import cv2
 import config as c
 from utils import resize_img
 from data_preprocessing_vton.pose import PoseModel
-from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, detect_person
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, detect_person, extract_person_without_clothing_google
 from random import random
 import multiprocessing
 import pickle
@@ -95,7 +95,7 @@ def preprocess_schp(clothing_types:list):
             # argmaxes = np.argmax(logits, axis=-1)
             img_filename = training_sample_id + '.jpg'
             original_img = cv2.imread(os.path.join(person_original_dir, 'm', img_filename))
-            retval = extract_person_without_clothing(filepath, img=original_img, stats=True)
+            retval = extract_person_without_clothing_google(filepath, img=original_img, stats=True)
             if retval is None:
                 log_file.write(f'no clothing, {filename}\n')
                 schp_img = cv2.imread(os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png'))
@@ -194,7 +194,7 @@ def preprocess():
     #    multiprocessing.Process(target=remove_duplicates),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
-    #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
+       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
     ]
     
     for process in processes:

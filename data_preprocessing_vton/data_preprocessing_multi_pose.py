@@ -4,7 +4,7 @@ import cv2
 import config as c
 from utils import resize_img, count_lines
 from data_preprocessing_vton.pose import PoseModel
-from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, extract_clothing, detect_person
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, extract_clothing, detect_person, extract_person_without_clothing_google
 from random import random
 import multiprocessing
 import pickle
@@ -143,7 +143,7 @@ def preprocess_schp(clothing_types:list):
           original_img = cv2.imread(os.path.join(person_original_dir, 'm', img_filename))
           if original_img is None:
               continue
-          retval = extract_person_without_clothing(filepath, img=original_img, stats=True)
+          retval = extract_person_without_clothing_google(filepath, img=original_img, stats=True)
           if retval is None:
             log_file.write(f'no clothing, {filename}\n')
             schp_img = cv2.imread(os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png'))
@@ -174,6 +174,7 @@ def preprocess_schp(clothing_types:list):
           if os.path.exists(clothing_flat_img_path):
             clothing_img = cv2.imread(clothing_flat_img_path)
           if clothing_img is None:
+            continue
             clothing_front_img_path = os.path.join(clothing_dir_front, training_sample_id + '.jpg')
             clothing_img = cv2.imread(clothing_front_img_path)
             filepath = os.path.join(schp_raw_output_dir_atr_front, filename)
@@ -303,7 +304,7 @@ def preprocess():
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(clothing_dir_front, schp_raw_output_dir_atr_front), kwargs={'model':'atr'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
     # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
-    #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
+       multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
     #    multiprocessing.Process(target=filter_non_persons),
     ]
     for process in processes:

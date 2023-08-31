@@ -5,7 +5,7 @@ import torch
 ROOT_DIR = '/home/yoni/Desktop/f'
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
 ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
-DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res']
+DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res', 'artistic']
 PREPROCESSED_DATA_VTON_DIR = os.path.join(DATA_DIR, 'processed_data_vton')
 PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection', 'problematic_data', 'aux']
 sml_dirs = ['person_original']
@@ -104,6 +104,7 @@ NUM_DIFFUSION_TIMESTEPS = 256
 USE_CLASSIFIER_FREE_GUIDANCE = False
 USE_AMP = True
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
+
 if USE_AMP:
     if USE_BFLOAT16:
         MODEL_DTYPE = torch.bfloat16

@@ -86,8 +86,8 @@ if __name__ == '__main__':
     last_save_batch_num = 0
 
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '27-August-17:12_1061276_normal_loss_0.039.pth'))
+    if 1:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '31-August-18:08_1411836_normal_loss_0.031.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])

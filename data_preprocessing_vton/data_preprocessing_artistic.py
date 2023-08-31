@@ -4,7 +4,7 @@ import cv2
 import config as c
 from utils import resize_img, count_lines
 from data_preprocessing_vton.pose import PoseModel
-from data_preprocessing_vton.schp import generate_raw_schp_values, extract_person_without_clothing, extract_clothing, detect_person
+from data_preprocessing_vton.schp import generate_raw_schp_values, extract_clothing, detect_person, extract_person_without_clothing_google
 from random import random
 import multiprocessing
 import pickle
@@ -26,9 +26,7 @@ log_pose_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_
 log_schp_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_schp.txt')
 log_person_detection_file_path = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'log_person_detection.txt')
 
-schp_raw_output_dir_pascal_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'pascal_person')
 schp_raw_output_dir_atr_person = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'schp_raw_output', 'atr_person')
-os.makedirs(schp_raw_output_dir_pascal_person, exist_ok=True)
 os.makedirs(schp_raw_output_dir_atr_person, exist_ok=True)
 
 
@@ -39,7 +37,9 @@ def preprocess_pose():
         filenames = os.listdir(os.path.join(original_data_dir, 'person'))
         for filename in tqdm(filenames):
             person_img_medium = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=os.path.join(original_data_dir, 'person', filename))
-            person_img_large = resize_img(c.VTON_RESOLUTION['l'][1], c.VTON_RESOLUTION['l'][0], input_img_path=os.path.join(original_data_dir, 'person', filename))
+            # person_img_large = resize_img(c.VTON_RESOLUTION['l'][1], c.VTON_RESOLUTION['l'][0], input_img_path=os.path.join(original_data_dir, 'person', filename))
+            # Use original size, or else the image would be downsampled. We are going to extract subsquares for training anyway, rather than using the entire image.
+            person_img_large = cv2.imread(os.path.join(original_data_dir, 'person', filename))
             clothing_img = resize_img(c.VTON_RESOLUTION['m'][1], c.VTON_RESOLUTION['m'][0], input_img_path=os.path.join(original_data_dir, 'clothing', filename))
             training_sample_id = f'{data_source_acronym}_{filename.split(".")[0]}_{training_sample_num}'
             keypoints = pose_model.get_keypoints(person_img_medium)
@@ -65,7 +65,7 @@ def preprocess_pose():
                 cv2.imwrite(inspection_path_clothing, clothing_img)
                 pose_model.save_or_return_img_w_overlaid_keypoints(person_img_medium, keypoints, output_path=inspection_path_keypoints)
             training_sample_num += 1
-            # if training_sample_num > 100:
+            # if training_sample_num > 20:
             #     return
     return 
             
@@ -88,7 +88,7 @@ def preprocess_schp(clothing_types:list):
             # argmaxes = np.argmax(logits, axis=-1)
             img_filename = training_sample_id + '.jpg'
             original_img = cv2.imread(os.path.join(person_original_dir, 'm', img_filename))
-            retval = extract_person_without_clothing(filepath, img=original_img, stats=True)
+            retval = extract_person_without_clothing_google(filepath, img=original_img, stats=True)
             if retval is None:
                 log_file.write(f'no clothing, {filename}\n')
                 schp_img = cv2.imread(os.path.join(schp_raw_output_dir_atr_person, training_sample_id+'.png'))
@@ -109,7 +109,7 @@ def preprocess_schp(clothing_types:list):
             cv2.imwrite(masked_img_path, masked_img)
             clothing_count[max_appearing_clothing_type] += 1
             
-            if training_sample_id+'_person_original.jpg' in saved_for_inspection:
+            if training_sample_id+'_person_original' in saved_for_inspection:
                 inspection_path_person_masked = os.path.join(inspection_dir, f'{training_sample_id}_person_masked.jpg')
                 cv2.imwrite(inspection_path_person_masked, masked_img)   
     
@@ -137,13 +137,8 @@ def count_lines(filename):
 def preprocess():            
     processes = [
     #    multiprocessing.Process(target=preprocess_pose),
-    #    multiprocessing.Process(target=remove_duplicates),
-    #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_pascal_person), kwargs={'model':'pascal'}),
-    #    multiprocessing.Process(target=generate_raw_schp_values, args=(clothing_dir_front, schp_raw_output_dir_atr_front), kwargs={'model':'atr'}),
     #    multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_atr_person), kwargs={'model':'atr'}),
-    # multiprocessing.Process(target=generate_raw_schp_values, args=(os.path.join(person_original_dir, 'm'), schp_raw_output_dir_lip_person), kwargs={'model':'lip'}),
     #    multiprocessing.Process(target=preprocess_schp, args=([4,7],)), # 4,7 is upper-clothes and dress
-    #    multiprocessing.Process(target=filter_non_persons),
     ]
     for process in processes:
         process.start()

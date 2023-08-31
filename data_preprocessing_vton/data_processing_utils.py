@@ -131,7 +131,7 @@ def create_downsampled_data_from_m(dirs, size='s'):
 
 def create_downsampled_data_from_m_all(size='s'):
   base_dir =  '/home/yoni/Desktop/f/data/processed_data_vton'
-  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses']
+  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic']
   sub_dirs = ['clothing', 'mask_coordinates', 'person_original', 'person_with_masked_clothing', 'pose_keypoints']
   for data_source in data_sources:
     data_source_path = os.path.join(base_dir, data_source)
@@ -189,13 +189,13 @@ def create_final_dataset_vton_size_to_size(size='s'):
   target_inspection_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}_inspection')
   os.makedirs(target_inspection_dir, exist_ok=True)
   log_filepath = os.path.join(ready_datasets, f'vton_{size}_to_{size}_log.txt')
-  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses']
+  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic']
   # How many additional (augmented) training samples should be created 
   # from an original training sample, coming from a particular data source.
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
   # prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0.5, 'same_person_two_poses':1}
-  prob_aug = {'misc_online': 1, 'multi_pose': 1, 'paired_high_res':1, 'same_person_two_poses':1}
+  prob_aug = {'misc_online': 1, 'multi_pose': 1, 'paired_high_res':1, 'same_person_two_poses':1, 'artistic':1}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:
@@ -291,15 +291,15 @@ def create_final_dataset_vton_size_to_size(size='s'):
             _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, mask_coordinates_arr, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
-        # if num_training_samples > 100:
-        #   return
+        if num_training_samples > 100:
+          return
       
       print(f'finished {data_source_dir_name}, processed {num_training_samples - num_training_samples_before_this_data_source} samples') 
   print(f'FINISHED, total of {num_training_samples} samples')      
 
 
 downsample_factor_per_size = {'s':2, 't':4}
-for size in ['s', 't']:
+for size in ['s']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

@@ -13,31 +13,47 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-base_dir_src = ''
-base_dir_dst = ''
+# with open('/home/yoni/Desktop/f/data/processed_data_vton/artistic/schp_raw_output/densepose/densepose.pkl', 'rb') as f:
+#     data = torch.load(f)
+#     for densefile in data:
+#       filename = densefile['file_name'].split('/')[-1].split('.')[0]
+#       torch.save(densefile, f'/home/yoni/Desktop/f/data/processed_data_vton/artistic/schp_raw_output/densepose/{filename}.pkl')
+# print('f')
+# sys.exit()
 
-counter = 0
-for d in os.listdir(base_dir_src):
-  filenames = set(os.listdir(os.path.join(base_dir_src,d)))
-  final_filenames = set()
-  for filename in filenames:
-    sample_id = '_'.join(filename.split('_')[:-1])
-    suffix = filename.split('_')[-1]
-    person = sample_id + '_person'
-    clothing = sample_id + '_clothing'
-    if suffix  == 'person' and clothing in filenames:
-        final_filenames.add(sample_id)
-    elif suffix  == 'clothing' and person in filenames:
-        final_filenames.add(sample_id)
+# base_dir_src = '/home/yoni/Desktop/artistic/'
+# base_dir_dst = '/home/yoni/Desktop/f/data/original_data/artistic/'
+
+# os.makedirs(os.path.join(base_dir_dst, 'clothing'), exist_ok=True)
+# os.makedirs(os.path.join(base_dir_dst, 'person'), exist_ok=True)
+# counter = 0
+# for d in tqdm(os.listdir(base_dir_src)):
+#   filenames = set(os.listdir(os.path.join(base_dir_src,d)))
+#   final_filenames = set()
+#   for filename in filenames:
+#     sample_id = '_'.join(filename.split('_')[:-1])
+#     suffix = filename.split('_')[-1].split('.')[0]
+#     person = sample_id + '_person.jpg'
+#     clothing = sample_id + '_clothing.jpg'
+#     if suffix  == 'person' and clothing in filenames:
+#         final_filenames.add(sample_id)
+#     elif suffix  == 'clothing' and person in filenames:
+#         final_filenames.add(sample_id)
   
-  for sample_id in final_filenames:
-    clothing = cv2.imread(os.path.join(base_dir_src, d, sample_id+'_clothing.jpg'))
-    person = cv2.imread(os.path.join(base_dir_src, d, sample_id+'_person.jpg'))
-    cv2.imwrite(os.path.join(base_dir_dst, 'clothing', 'm', sample_id + f'{counter}.jpg'), person)
-    cv2.imwrite(os.path.join(base_dir_dst, 'person', 'm', sample_id + f'{counter}.jpg'), clothing)
-    counter += 1
+#   for sample_id in final_filenames:
+#     clothing_path = os.path.join(base_dir_src, d, sample_id+'_clothing.jpg')
+#     person_path = os.path.join(base_dir_src, d, sample_id+'_person.jpg')
+#     if os.path.getsize(clothing_path) < 1000 or os.path.getsize(person_path) < 1000:
+#       continue
+#     clothing = cv2.imread(clothing_path)
+#     person = cv2.imread(person_path)
+#     cv2.imwrite(os.path.join(base_dir_dst, 'clothing', f'{counter}.jpg'), clothing)
+#     cv2.imwrite(os.path.join(base_dir_dst, 'person', f'{counter}.jpg'), person)
+#     counter += 1
     
     
+    
+
 
 # basedir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/'
 # destdir = '/home/yoni/Desktop/f/data/filtering/sp2p'

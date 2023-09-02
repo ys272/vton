@@ -110,11 +110,11 @@ if __name__ == '__main__':
         initial_learning_rate = model_state['learning_rate']
         last_save_batch_num = model_state['last_save_batch_num']
         
-        # was_ema_initialized = model_state['was_ema_initialized']
-        # if c.RUN_EMA and was_ema_initialized:
-        #     ema_model_main.load_state_dict(model_state['model_ema_main_state_dict'])
-        #     ema_model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
-        #     ema = EMA(0.999, ema_batch_num_start, was_i_initialized=was_ema_initialized)
+        was_ema_initialized = model_state['was_ema_initialized']
+        if c.RUN_EMA and was_ema_initialized:
+            ema_model_main.load_state_dict(model_state['model_ema_main_state_dict'])
+            ema_model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
+            ema = EMA(0.999, ema_batch_num_start, was_i_initialized=was_ema_initialized)
         
         del model_state
         torch.cuda.empty_cache()

@@ -343,11 +343,11 @@ class PreNorm(nn.Module):
 
 
 class EMA:
-    def __init__(self, beta, batch_num_when_ema_should_start):
+    def __init__(self, beta, batch_num_when_ema_should_start, was_i_initialized=False):
         super().__init__()
         self.beta = beta
         self.batch_num = 0
-        self.was_i_initialized = False
+        self.was_i_initialized = was_i_initialized
         self.batch_num_when_ema_should_start = batch_num_when_ema_should_start
 
     def update_model_average(self, ema_model_main, model_main, ema_model_aux, model_aux):
@@ -387,13 +387,16 @@ class TrainerHelper:
         self.backprop_batch_num = backprop_batch_num
         self.last_save_batch_num = last_save_batch_num
         
-    def save(self, min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
+    def save(self, min_loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0, suffix=''):
         save_path = os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, self.human_readable_timestamp + suffix)
         torch.save({
             'batch_num': batch_num,
             'backprop_batch_num': self.backprop_batch_num,
             'model_main_state_dict': model_main.state_dict(),
             'model_aux_state_dict': model_aux.state_dict(),
+            'model_ema_main_state_dict': ema_model_main.state_dict(),
+            'model_ema_aux_state_dict': ema_model_aux.state_dict(),
+            'was_ema_initialized': was_ema_initialized,
             'optimizer_state_dict': optimizer.state_dict(),
             'scaler_state_dict': scaler.state_dict(),
             'loss': min_loss,
@@ -404,7 +407,7 @@ class TrainerHelper:
             'last_save_batch_num': self.last_save_batch_num,
         }, save_path)
                 
-    def update_loss_possibly_save_model(self, loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
+    def update_loss_possibly_save_model(self, loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=0):
         # self.backprop_batch_num += 1
         
         if loss < self.min_loss:
@@ -414,11 +417,11 @@ class TrainerHelper:
             if batch_num >= save_from_this_batch_num:
                 save_suffix = f'_MIN_loss.pth'
                 self.last_save_batch_num = batch_num
-                self.save(self.min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+                self.save(self.min_loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
         elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > 10000:
             save_suffix = f'_{batch_num}_normal_loss_{loss:.3f}.pth'
             self.last_save_batch_num = batch_num
-            self.save(self.min_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
+            self.save(self.min_loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
         # return self.backprop_batch_num - self.min_loss_batch_num
         return batch_num - self.min_loss_batch_num
     

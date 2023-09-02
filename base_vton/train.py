@@ -83,11 +83,20 @@ if __name__ == '__main__':
     # Represents the number of batches we've done backprop on (will differ from batch num if accumulation_rate != 1)
     backprop_batch_num = 0
     min_loss = float('inf')
+    
     last_save_batch_num = 0
-
+    ema_batch_num_start = 20000
+    ema = EMA(0.999, ema_batch_num_start)
+    if c.RUN_EMA:
+        ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
+        ema_model_aux = copy.deepcopy(model_aux).eval().requires_grad_(False)
+    else:
+        ema_model_main = None
+        ema_model_aux = None
+    
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '31-August-18:08_1411836_normal_loss_0.031.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '01-September-s_long.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -100,6 +109,13 @@ if __name__ == '__main__':
         accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
         last_save_batch_num = model_state['last_save_batch_num']
+        
+        # was_ema_initialized = model_state['was_ema_initialized']
+        # if c.RUN_EMA and was_ema_initialized:
+        #     ema_model_main.load_state_dict(model_state['model_ema_main_state_dict'])
+        #     ema_model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
+        #     ema = EMA(0.999, ema_batch_num_start, was_i_initialized=was_ema_initialized)
+        
         del model_state
         torch.cuda.empty_cache()
         
@@ -120,10 +136,6 @@ if __name__ == '__main__':
     # call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
     epochs = 1000000
-    ema_batch_num_start = 20000
-    ema = EMA(0.999, ema_batch_num_start)
-    ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
-    ema_model_aux = copy.deepcopy(model_aux).eval().requires_grad_(False)
     trainer_helper = TrainerHelper(human_readable_timestamp, min_loss = min_loss, min_loss_batch_num=batch_num, backprop_batch_num=backprop_batch_num, last_save_batch_num=last_save_batch_num)
     # Enable cuDNN auto-tuner: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#enable-cudnn-auto-tuner
     torch.backends.cudnn.benchmark = True
@@ -264,7 +276,7 @@ if __name__ == '__main__':
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
-                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
+                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, ema_model_main, ema_model_aux, ema.was_i_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
                         # if num_batches_since_min_loss > 100000:
                         #     termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'

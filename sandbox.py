@@ -13,13 +13,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # with open('/home/yoni/Desktop/f/data/processed_data_vton/artistic/schp_raw_output/densepose/densepose.pkl', 'rb') as f:
 #     data = torch.load(f)
 #     for densefile in data:
 #       filename = densefile['file_name'].split('/')[-1].split('.')[0]
 #       torch.save(densefile, f'/home/yoni/Desktop/f/data/processed_data_vton/artistic/schp_raw_output/densepose/{filename}.pkl')
-# print('f')
 # sys.exit()
+
 
 # base_dir_src = '/home/yoni/Desktop/artistic/'
 # base_dir_dst = '/home/yoni/Desktop/f/data/original_data/artistic/'
@@ -51,9 +52,6 @@ import torch.nn.functional as F
 #     cv2.imwrite(os.path.join(base_dir_dst, 'person', f'{counter}.jpg'), person)
 #     counter += 1
     
-    
-    
-
 
 # basedir = '/home/yoni/Desktop/f/data/processed_data_vton/same_person_two_poses/'
 # destdir = '/home/yoni/Desktop/f/data/filtering/sp2p'

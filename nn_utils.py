@@ -346,7 +346,6 @@ class EMA:
     def __init__(self, beta, batch_num_when_ema_should_start, was_i_initialized=False):
         super().__init__()
         self.beta = beta
-        self.batch_num = 0
         self.was_i_initialized = was_i_initialized
         self.batch_num_when_ema_should_start = batch_num_when_ema_should_start
 
@@ -363,14 +362,13 @@ class EMA:
             return new
         return old * self.beta + (1 - self.beta) * new
 
-    def step_ema(self, ema_model_main, model_main, ema_model_aux, model_aux):
-        if self.batch_num >= self.batch_num_when_ema_should_start:
+    def step_ema(self, ema_model_main, model_main, ema_model_aux, model_aux, batch_num):
+        if batch_num >= self.batch_num_when_ema_should_start:
             if not self.was_i_initialized:
                 self.reset_parameters(ema_model_main, model_main, ema_model_aux, model_aux)
                 self.was_i_initialized = True
             else:
                 self.update_model_average(ema_model_main, model_main, ema_model_aux, model_aux)
-        self.batch_num += 1
 
     def reset_parameters(self, ema_model_main, model_main, ema_model_aux, model_aux): 
         ema_model_main.load_state_dict(model_main.state_dict())

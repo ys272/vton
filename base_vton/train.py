@@ -96,7 +96,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '01-September-s_long.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-September-10:52_1864988_normal_loss_0.030.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -219,8 +219,10 @@ if __name__ == '__main__':
                         scaler.update()
                     else:
                         optimizer.step()
+                    if c.RUN_EMA:
+                        ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux, batch_num)
                             
-                if batch_num % 10005 == 0:
+                if batch_num % 100005 == 0:
                     log_file.flush()
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)
@@ -270,9 +272,6 @@ if __name__ == '__main__':
                 # print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')                
                 if (batch_num-1) % c.EVAL_FREQUENCY == 0:
                     print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
-                
-                if c.RUN_EMA:
-                    ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux)
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate

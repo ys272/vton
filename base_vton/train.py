@@ -96,7 +96,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-September-10:52_1864988_normal_loss_0.030.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-September-16:28_2225564_s_LONG_GOOD2.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -326,30 +326,33 @@ if __name__ == '__main__':
                             inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose_vector[:num_eval_samples].cuda(), pose_matrix[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
                         
                     val_loss = 0
-                    for model_main_,model_aux_,suffix in [(model_main, model_aux, ''), (ema_model_main, ema_model_aux, '_ema')]:
-                        if suffix == '_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
-                            continue
-                        if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                            img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
-                        else:
-                            img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width))
-                        for i,img in enumerate(img_sequences[-1]):
+                    for eval_mode,eval_mode_id in [(True, 'with_cfg'), (False, 'no_cfg')]:
+                        for model_main_,model_aux_,suffix in [(model_main, model_aux, '_no_ema'), (ema_model_main, ema_model_aux, '_with_ema')]:
+                            if suffix == '_with_ema' and (not c.RUN_EMA or batch_num < ema_batch_num_start):
+                                continue
+                            if eval_mode == True and not c.USE_CLASSIFIER_FREE_GUIDANCE:
+                                continue
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                                img = img.clamp(-1,1)
-                            if suffix == '':
-                                val_loss += F.l1_loss(img.cpu(), person[i]).item()
-                            img = denormalize_img(img)
-                            full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
-                            save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}_PRED.png'), nrow = 4//2)
-                            if suffix == '':
-                                masked_img = (((masked_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                person_img = (((person[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                clothing_img = (((clothing_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose_vector[i], return_value=True)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_masked.png'), masked_img)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_person.png'), person_img)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_clothing.png'), clothing_img)
-                                cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{full_string_identifier}_pose.png'), pose_img)
+                                img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
+                            else:
+                                img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), eval_mode=eval_mode)
+                            for i,img in enumerate(img_sequences[-1]):
+                                if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                                    img = img.clamp(-1,1)
+                                if suffix == '_no_ema':
+                                    val_loss += F.l1_loss(img.cpu(), person[i]).item()
+                                img = denormalize_img(img)
+                                full_string_identifier = sample_original_string_id[i] + '_' + str(sample_unique_string_id[i])
+                                save_image(img, os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}_PRED.png'), nrow = 4//2)
+                                if suffix == '_no_ema' and eval_mode_id == 'no_cfg':
+                                    masked_img = (((masked_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                    person_img = (((person[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                    clothing_img = (((clothing_aug[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                    pose_img = save_or_return_img_w_overlaid_keypoints(person_img.copy(), pose_vector[i], return_value=True)
+                                    cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_masked.png'), masked_img)
+                                    cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_person.png'), person_img)
+                                    cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_clothing.png'), clothing_img)
+                                    cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_pose.png'), pose_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:

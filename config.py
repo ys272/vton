@@ -101,7 +101,7 @@ RANDOM_SEED = 7
 OPTIMIZE = True
 USE_BFLOAT16 = True
 NUM_DIFFUSION_TIMESTEPS = 256
-USE_CLASSIFIER_FREE_GUIDANCE = False
+USE_CLASSIFIER_FREE_GUIDANCE = True
 USE_AMP = True
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
 

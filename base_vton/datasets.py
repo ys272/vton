@@ -142,10 +142,10 @@ def create_datasets():
         sample.append((sample_data, sample_original_string_id, sample_unique_string_id, sample_type))
 
     train_frac = 0.97
-    val_frac = 0.01
+    val_frac = 0.015
     test_frac = 1 - train_frac - val_frac
-    # train_frac = 0.1
-    # val_frac = 0.01
+    # train_frac = 0.3
+    # val_frac = 0.3
     # test_frac = 1 - train_frac - val_frac
 
     num_files_per_sample = 5 # clothing, masked person, original person, pose keypoints, mask coordinates
@@ -196,8 +196,8 @@ def create_datasets():
 
     # Set batch size and other options as needed
     train_dataloader = DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=3, pin_memory=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=c.BATCH_SIZE, shuffle=False)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=2, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     # torch.save(test_dataloader, f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
 

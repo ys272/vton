@@ -9,6 +9,15 @@ import random
 import time
 from tqdm import tqdm
 
+
+if c.USE_AMP:
+    if c.USE_BFLOAT16:
+        MODEL_DTYPE = torch.bfloat16
+    else:
+        MODEL_DTYPE = torch.float16
+else:
+    MODEL_DTYPE = torch.float32
+      
       
 class CustomDataset(Dataset):
     '''
@@ -32,7 +41,7 @@ class CustomDataset(Dataset):
         # There are a total of 17 keypoints, but the first five are of the face rather than the body.
         # For the concatenated keypoints, we only use the body keypoints (in the vector we use everything).
         num_needed_keypoint_dims = 12
-        pose_matrix = torch.zeros((num_needed_keypoint_dims, self.height, self.width), dtype=c.MODEL_DTYPE)
+        pose_matrix = torch.zeros((num_needed_keypoint_dims, self.height, self.width), dtype=MODEL_DTYPE)
         # Thje vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
         for p_idx in range(10, len(pose_vector), 2):
             # We flip the order of the keypoints because pytorch and tensorflow (where the keypoints come from) use a different axis ordering system.
@@ -72,35 +81,34 @@ class CustomDataset(Dataset):
         # cv2.imwrite(f'/home/yoni/Desktop/examples/{noise_amount_clothing*10}_.jpg', img_)        
         return augmented_sample  
 
-
-def create_datasets():
+size = c.IMAGE_SIZE
+height = c.VTON_RESOLUTION[size][0]
+width = c.VTON_RESOLUTION[size][1]
+def process_keypoints(keypoints):
+    ''' 
+    Normalize keypoints array from integer coordinates to values in [0, 1].
+    If a coordinate is missing (the model was unconfident regarding its location),
+    it should be replaced with (0,0).
+    '''
+    normalized_keypoints = []
+    for keypoint in keypoints:
+        if keypoint is None:
+            normalized_keypoints.append(0)
+            normalized_keypoints.append(0)
+        else:
+            normalized_keypoints.append(keypoint[0]/width)
+            normalized_keypoints.append(keypoint[1]/height)
+            assert keypoint[0]/width <= 1
+            assert keypoint[1]/height <= 1
+    normalized_keypoints = torch.tensor(normalized_keypoints, dtype=MODEL_DTYPE)
+    return normalized_keypoints
     
-    def process_keypoints(keypoints):
-        ''' 
-        Normalize keypoints array from integer coordinates to values in [0, 1].
-        If a coordinate is missing (the model was unconfident regarding its location),
-        it should be replaced with (0,0).
-        '''
-        normalized_keypoints = []
-        for keypoint in keypoints:
-            if keypoint is None:
-                normalized_keypoints.append(0)
-                normalized_keypoints.append(0)
-            else:
-                normalized_keypoints.append(keypoint[0]/width)
-                normalized_keypoints.append(keypoint[1]/height)
-                assert keypoint[0]/width <= 1
-                assert keypoint[1]/height <= 1
-        normalized_keypoints = torch.tensor(normalized_keypoints, dtype=c.MODEL_DTYPE)
-        return normalized_keypoints
-
+    
+def create_datasets():
     start_time = time.time()
     print(f'Started loading data')
 
-    size = c.IMAGE_SIZE
     dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}')
-    height = c.VTON_RESOLUTION[size][0]
-    width = c.VTON_RESOLUTION[size][1]
 
     all_samples = {}
 

@@ -2,8 +2,17 @@ from torch.utils.data import DataLoader
 from model import *
 from diffusion_ddim import call_sampler_simple
 from diffusion_karras import call_sampler_simple_karras
-from datasets import CustomDataset
+from datasets import CustomDataset, process_keypoints
 
+
+if c.USE_AMP:
+    if c.USE_BFLOAT16:
+        MODEL_DTYPE = torch.bfloat16
+    else:
+        MODEL_DTYPE = torch.float16
+else:
+    MODEL_DTYPE = torch.float32
+    
 
 img_height = c.VTON_RESOLUTION[c.IMAGE_SIZE][0]
 img_width = c.VTON_RESOLUTION[c.IMAGE_SIZE][1]
@@ -20,9 +29,9 @@ model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_a
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '27-August-17:12_1061276_normal_loss_0.039.pth'))
-model_main.load_state_dict(model_state['model_main_state_dict'])
-model_aux.load_state_dict(model_state['model_aux_state_dict'])
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-September-10:59_s_LONG_GOOD3.pth'))
+model_main.load_state_dict(model_state['model_ema_main_state_dict'])
+model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
 model_main.eval()
 model_aux.eval()
 size = c.IMAGE_SIZE
@@ -33,24 +42,93 @@ PARAMS
 '''
 
 shuffle = False
+unaligned_test_dataset = True
 
-if shuffle:
-  test_dataloader_w_shuffle = DataLoader(test_dataloader.dataset, batch_size=test_dataloader.batch_size, shuffle=True)
-  clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader_w_shuffle))
-else:
-  test_dataloader = iter(test_dataloader)
-  clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
-  # clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
-  # clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+if not unaligned_test_dataset:
+  if shuffle:
+    test_dataloader_w_shuffle = DataLoader(test_dataloader.dataset, batch_size=test_dataloader.batch_size, shuffle=True)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader_w_shuffle))
+  else:
+    test_dataloader = iter(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(test_dataloader)
 
-num_eval_samples = min(8, clothing_aug.shape[0])
-if not c.USE_BFLOAT16:
-  inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose_vector[:num_eval_samples].cuda().float(), pose_matrix[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+  num_eval_samples = min(8, clothing_aug.shape[0])
+  if not c.USE_BFLOAT16:
+    inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose_vector[:num_eval_samples].cuda().float(), pose_matrix[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+  else:
+    inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose_vector[:num_eval_samples].cuda(), pose_matrix[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
+  if c.REVERSE_DIFFUSION_SAMPLER == 'ddim':
+    imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=True)
+  else:
+    imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False)
 else:
-  inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose_vector[:num_eval_samples].cuda(), pose_matrix[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
-if c.REVERSE_DIFFUSION_SAMPLER == 'ddim':
-  imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False)
-else:
-  imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False)
-
-print('')
+  unaligned_test_dataset_dir = '/home/yoni/Desktop/f/test/ready_data/'
+  for person_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'person_original', 's')):
+    person = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_original', 's', person_filename))
+    person = (person / 127.5) - 1
+    person = person.transpose(2,0,1)
+    person = np.copy(person.astype(np.float16)[::-1])
+    person = torch.from_numpy(person)
+    
+    masked = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_with_masked_clothing', 's', person_filename))
+    masked = (masked / 127.5) - 1
+    masked = masked.transpose(2,0,1)
+    masked = np.copy(masked.astype(np.float16)[::-1])
+    masked = torch.from_numpy(masked)
+    
+    mask_coords = torch.from_numpy(np.load(os.path.join(unaligned_test_dataset_dir,'mask_coordinates', 's', person_filename.split('.')[0] + '.npy')))
+    with open(os.path.join(unaligned_test_dataset_dir, 'pose_keypoints', 's', person_filename.split('.')[0] + '.txt'), 'r') as f:
+      pose_vector = process_keypoints(eval(f.readlines()[0]))
+    num_needed_keypoint_dims = 12
+    pose_matrix = torch.zeros((num_needed_keypoint_dims, img_height, img_width), dtype=MODEL_DTYPE)
+    # Thje vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
+    for p_idx in range(10, len(pose_vector), 2):
+        # We flip the order of the keypoints because pytorch and tensorflow (where the keypoints come from) use a different axis ordering system.
+        y = pose_vector[p_idx]
+        x = pose_vector[p_idx+1]
+        if x==0 and y==0:
+            continue
+        x = torch.round(x * img_height)
+        y = torch.round(y * img_width)
+        pose_matrix[int((p_idx - 10)/2)][int(min(img_height - 1, x)), int(min(img_width - 1, y))] = 1
+        
+    noise_amount_masked = 0.01
+    noise_tensor = torch.randn_like(masked)
+    masked_aug = masked * (1 - noise_amount_masked) + noise_tensor * noise_amount_masked
+    masked_aug[:, mask_coords] = masked[:, mask_coords]
+    
+    clothing_augs = []
+    noise_amount_clothings = []
+    sample_unique_string_ids = []
+    for clothing_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'clothing', 's')): 
+      clothing = cv2.imread(os.path.join(unaligned_test_dataset_dir,'clothing', 's', clothing_filename))
+      clothing = (clothing / 127.5) - 1
+      clothing = clothing.transpose(2,0,1)
+      clothing = np.copy(clothing.astype(np.float16)[::-1])
+      clothing = torch.from_numpy(clothing)
+      
+      noise_amount_clothing = 0.01
+      noise_tensor = torch.randn_like(clothing)
+      clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
+      clothing_augs.append(clothing_aug)
+      noise_amount_clothings.append(noise_amount_clothing)
+      sample_unique_string_ids.append(person_filename + '_' + clothing_filename)
+      
+    num_samples = len(clothing_augs)
+    clothing_augs = torch.stack(clothing_augs).cuda().to(torch.bfloat16)
+    mask_coords = torch.stack([mask_coords.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
+    masked_aug = torch.stack([masked_aug.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
+    person = torch.stack([person.cuda().clone() for _ in range(num_samples)]).to(torch.float16)
+    pose_vector = torch.stack([pose_vector.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
+    pose_matrix = torch.stack([pose_matrix.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
+    noise_amount_clothing = torch.tensor([noise_amount_clothing] * num_samples, device='cuda').to(torch.bfloat16)
+    noise_amount_masked = torch.tensor([noise_amount_masked] * num_samples, device='cuda').to(torch.bfloat16)
+    
+    inputs = [clothing_augs, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing, noise_amount_masked]
+    imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False)

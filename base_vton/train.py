@@ -95,7 +95,7 @@ if __name__ == '__main__':
         ema_model_aux = None
     
     # Load model from checkpoint.
-    if 1:
+    if False:
         model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-September-16:28_2225564_s_LONG_GOOD2.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
@@ -222,7 +222,7 @@ if __name__ == '__main__':
                     if c.RUN_EMA:
                         ema.step_ema(ema_model_main, model_main, ema_model_aux, model_aux, batch_num)
                             
-                if batch_num % 100005 == 0:
+                if batch_num % 10005 == 0:
                     log_file.flush()
                     for name, param in model_main.named_parameters():
                         tb.add_histogram('main_'+name, param, batch_num)

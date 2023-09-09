@@ -72,7 +72,7 @@ if __name__ == '__main__':
         
     initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
     final_learning_rate = 1e-4
-    num_LR_decay_cycles = 20000
+    num_LR_decay_cycles = 40000
     learning_rates = np.linspace(initial_learning_rate, final_learning_rate, num=num_LR_decay_cycles)
     
     optimizer = Adam(list(model_main.parameters()) + list(model_aux.parameters()), lr=initial_learning_rate, eps=c.ADAM_EPS)
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     min_loss = float('inf')
     
     last_save_batch_num = 0
-    ema_batch_num_start = 500000
+    ema_batch_num_start = 1000000
     ema = EMA(0.999, ema_batch_num_start)
     if c.RUN_EMA:
         ema_model_main = copy.deepcopy(model_main).eval().requires_grad_(False)
@@ -95,8 +95,8 @@ if __name__ == '__main__':
         ema_model_aux = None
     
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-September-16:28_2225564_s_LONG_GOOD2.pth'))
+    if 1:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-September-21:31_358764_normal_loss_0.038.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])

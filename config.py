@@ -4,7 +4,7 @@ import os
 ROOT_DIR = '/home/yoni/Desktop/f'
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
 ORIGINAL_DATA_DIR = os.path.join(DATA_DIR, 'original_data')
-DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res', 'artistic']
+DATA_SOURCES = ['same_person_two_poses', 'misc_online', 'misc_world', 'multi_pose', 'paired_low_res', 'paired_high_res', 'artistic', 'graphictees']
 PREPROCESSED_DATA_VTON_DIR = os.path.join(DATA_DIR, 'processed_data_vton')
 PREPROCESSED_DATA_VTON_SUB_DIRS = ['person_original', 'person_with_masked_clothing', 'clothing', 'pose_keypoints', 'mask_coordinates', 'schp_raw_output', 'inspection', 'problematic_data', 'aux']
 sml_dirs = ['person_original']
@@ -119,6 +119,7 @@ MAX_EFFECTIVE_BATCH_SIZE = 128
 MAX_ACCUMULATION_RATE = MAX_EFFECTIVE_BATCH_SIZE / BATCH_SIZE
 MODELS_INIT_DIM = 128
 MODELS_PARAMS = {
+    'm': [(128, 128, 320, 512, 512), (128, 128, 320, 512, 512), (False, False, True), (2,3,3,3,3), (2,2,2,3,3)],
     's': [(128, 320, 512, 640), (128, 320, 512, 640), (False, False, True), (3,3,4,4), (2,2,3,3)],
     't': [(128, 512, 512), (128, 512, 512), (False, True), (2,4,4), (2,4,4)]
 }

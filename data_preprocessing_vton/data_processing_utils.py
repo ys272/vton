@@ -131,7 +131,7 @@ def create_downsampled_data_from_m(dirs, size='s'):
 
 def create_downsampled_data_from_m_all(size='s'):
   base_dir =  '/home/yoni/Desktop/f/data/processed_data_vton'
-  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic']
+  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic', 'graphictees']
   sub_dirs = ['clothing', 'mask_coordinates', 'person_original', 'person_with_masked_clothing', 'pose_keypoints']
   for data_source in data_sources:
     data_source_path = os.path.join(base_dir, data_source)
@@ -189,13 +189,13 @@ def create_final_dataset_vton_size_to_size(size='s'):
   target_inspection_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}_inspection')
   os.makedirs(target_inspection_dir, exist_ok=True)
   log_filepath = os.path.join(ready_datasets, f'vton_{size}_to_{size}_log.txt')
-  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic']
+  data_sources = ['misc_online', 'multi_pose', 'paired_high_res', 'same_person_two_poses', 'artistic', 'graphictees']
   # How many additional (augmented) training samples should be created 
   # from an original training sample, coming from a particular data source.
   # Integer values {1,2,3,...}, mean # requested samples.
   # Fractional values [0, 1], are the probability of creating a single sample.
   # prob_aug = {'misc_online': 1, 'multi_pose': 0.5, 'paired_high_res':0.5, 'same_person_two_poses':1}
-  prob_aug = {'misc_online': 1, 'multi_pose': 1, 'paired_high_res':1, 'same_person_two_poses':1, 'artistic':1}
+  prob_aug = {'misc_online': 1, 'multi_pose': 1, 'paired_high_res':1, 'same_person_two_poses':1, 'artistic':1, 'graphictees':1}
   num_training_samples = 0
   
   with open(log_filepath, 'w') as log_file:

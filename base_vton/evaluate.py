@@ -29,13 +29,13 @@ model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_a
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-September-10:59_s_LONG_GOOD3.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '17-September-23:41_2719916_normal_loss_0.033.pth'))
 model_main.load_state_dict(model_state['model_ema_main_state_dict'])
 model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
 model_main.eval()
 model_aux.eval()
 size = c.IMAGE_SIZE
-test_dataloader = torch.load(f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
+test_dataloader = None #torch.load(f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
 
 '''
 PARAMS
@@ -121,14 +121,22 @@ else:
       sample_unique_string_ids.append(person_filename + '_' + clothing_filename)
       
     num_samples = len(clothing_augs)
-    clothing_augs = torch.stack(clothing_augs).cuda().to(torch.bfloat16)
-    mask_coords = torch.stack([mask_coords.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
-    masked_aug = torch.stack([masked_aug.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
-    person = torch.stack([person.cuda().clone() for _ in range(num_samples)]).to(torch.float16)
-    pose_vector = torch.stack([pose_vector.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
-    pose_matrix = torch.stack([pose_matrix.cuda().clone() for _ in range(num_samples)]).to(torch.bfloat16)
-    noise_amount_clothing = torch.tensor([noise_amount_clothing] * num_samples, device='cuda').to(torch.bfloat16)
-    noise_amount_masked = torch.tensor([noise_amount_masked] * num_samples, device='cuda').to(torch.bfloat16)
-    
-    inputs = [clothing_augs, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing, noise_amount_masked]
-    imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False)
+    start_batch_idx = 0
+    max_batch_size = 8
+    while start_batch_idx < num_samples-1:
+      end_batch_idx = min(start_batch_idx+8, num_samples-1)
+      num_samples_batch = end_batch_idx - start_batch_idx
+      
+      clothing_augs_batch = torch.stack(clothing_augs[start_batch_idx:end_batch_idx]).cuda().to(torch.bfloat16)
+      mask_coords_batch = torch.stack([mask_coords.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
+      masked_aug_batch = torch.stack([masked_aug.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
+      person_batch = torch.stack([person.cuda().clone() for _ in range(num_samples_batch)]).to(torch.float16)
+      pose_vector_batch = torch.stack([pose_vector.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
+      pose_matrix_batch = torch.stack([pose_matrix.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
+      noise_amount_clothing_batch = torch.tensor([noise_amount_clothing] * num_samples_batch, device='cuda').to(torch.bfloat16)
+      noise_amount_masked_batch = torch.tensor([noise_amount_masked] * num_samples_batch, device='cuda').to(torch.bfloat16)
+      
+      inputs = [clothing_augs_batch, mask_coords_batch, masked_aug_batch, person_batch, pose_vector_batch, pose_matrix_batch, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing_batch, noise_amount_masked_batch]
+      imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, end_batch_idx)))
+      
+      start_batch_idx = end_batch_idx

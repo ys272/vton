@@ -190,7 +190,8 @@ def create_datasets():
     print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}\n')
     print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}\n')
 
-    train_dataset = CustomDataset(train_samples)
+    # train_dataset = CustomDataset(train_samples)
+    train_dataset = CustomDataset(train_samples + test_samples)
     valid_dataset = CustomDataset(val_samples)
     test_dataset = CustomDataset(test_samples)
 

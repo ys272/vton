@@ -96,7 +96,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-September-21:31_358764_normal_loss_0.038.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '19-September-21:57_2740012_normal_loss_0.037.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])

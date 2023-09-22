@@ -21,6 +21,7 @@ class Unet_Person_Masked(nn.Module):
         level_repetitions = (2,3,4),
         channels=3,
         pose_dim=34,
+        base_image_size='s'
     ):
         super().__init__()
         
@@ -115,7 +116,10 @@ class Unet_Person_Masked(nn.Module):
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
-                elif level_idx == 1:
+                elif (base_image_size=='s' and level_idx == 1) or (base_image_size=='m' and level_idx == 2):
+                    # The 64 level should have cross attention. Since the for loop is iterating in backwards order,
+                    # when the image size is 'm', there is one additional level, and the 64 level is one index later (i.e 256, 128, 64, i.e index 2,
+                    # rather than 128,64 (in 's'), i.e index 1).
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))
             self.ups.append(nn.ModuleList(layers))
         
@@ -129,7 +133,6 @@ class Unet_Person_Masked(nn.Module):
     def forward(self, masked_aug, pose, noise_amount_masked, t, cross_attns=None):
         x = self.init_conv(masked_aug)
         if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-            # r = x.clone()
             time_vector = self.time_mlp((t * c.NUM_DIFFUSION_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         else:
             time_vector = self.time_mlp(t)

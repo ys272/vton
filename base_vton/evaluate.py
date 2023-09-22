@@ -43,6 +43,7 @@ PARAMS
 
 shuffle = False
 unaligned_test_dataset = True
+base_image_size = c.IMAGE_SIZE
 
 if not unaligned_test_dataset:
   if shuffle:
@@ -64,7 +65,7 @@ if not unaligned_test_dataset:
   else:
     inputs = [clothing_aug[:num_eval_samples].cuda(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda(), person[:num_eval_samples].cuda(), pose_vector[:num_eval_samples].cuda(), pose_matrix[:num_eval_samples].cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda(), noise_amount_masked[:num_eval_samples].cuda()]
   if c.REVERSE_DIFFUSION_SAMPLER == 'ddim':
-    imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=True)
+    imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=base_image_size, sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=True)
   else:
     imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False)
 else:
@@ -137,6 +138,6 @@ else:
       noise_amount_masked_batch = torch.tensor([noise_amount_masked] * num_samples_batch, device='cuda').to(torch.bfloat16)
       
       inputs = [clothing_augs_batch, mask_coords_batch, masked_aug_batch, person_batch, pose_vector_batch, pose_matrix_batch, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing_batch, noise_amount_masked_batch]
-      imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, end_batch_idx)))
+      imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), base_image_size=base_image_size, sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, end_batch_idx)))
       
       start_batch_idx = end_batch_idx

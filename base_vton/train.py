@@ -62,8 +62,11 @@ if __name__ == '__main__':
     level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
     level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
     level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
-    
-    model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+    if c.IMAGE_SIZE == 's':
+        num_start_channels = 19
+    elif c.IMAGE_SIZE == 'm':
+        num_start_channels = 22
+    model_main = Unet_Person_Masked(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
@@ -96,7 +99,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '19-September-21:57_2740012_normal_loss_0.037.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '21-September-12:17_3227948_normal_loss_0.030.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -337,7 +340,7 @@ if __name__ == '__main__':
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                             else:
-                                img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), eval_mode=eval_mode)
+                                img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=c.IMAGE_SIZE, eval_mode=eval_mode)
                             for i,img in enumerate(img_sequences[-1]):
                                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                     img = img.clamp(-1,1)

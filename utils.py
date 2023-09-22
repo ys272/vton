@@ -1,3 +1,5 @@
+import torch.nn.functional as F
+import torch
 import sys
 import os
 import cv2
@@ -85,3 +87,17 @@ def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=No
         cv2.imwrite(output_path, img)
     if return_value:
         return img
+    
+
+def downsample_and_upsample_person(person: torch.Tensor) -> torch.Tensor:
+    downsampled_person = F.interpolate(person, size=(c.VTON_RESOLUTION['s'][0], c.VTON_RESOLUTION['s'][1]), mode='area')
+    upsampled_person = F.interpolate(downsampled_person, size=(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1]), mode='nearest')
+    return upsampled_person
+
+
+def save_tensor_img_to_disk(img:torch.Tensor, name, target_dir=c.MODEL_OUTPUT_IMAGES_DIR, device=c.DEVICE):
+    if device == 'cuda':
+        img = (((img.to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+    else:
+        img = (((img.to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+    cv2.imwrite(os.path.join(target_dir, f'deleteme_{name}.png'), img)

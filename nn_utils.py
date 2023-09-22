@@ -15,6 +15,7 @@ from torch import nn, einsum
 import torch.nn.functional as F
 from diffusion_ddim import q_sample, extract, alphas_cumprod
 from diffusion_karras import q_sample_karras, scalings_karras
+from utils import downsample_and_upsample_person
 
 
 '''
@@ -456,8 +457,15 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
         pose_vector = torch.zeros_like(pose_vector)
     else:
         cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
-                                
-    x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
+    
+    if c.IMAGE_SIZE == 's':
+        x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
+    elif c.IMAGE_SIZE == 'm':
+        # When training the 'm' model, the upsampled person should be "noise augmented".
+        noise_tensor = torch.randn_like(person)
+        noise_augmented_person = person * (1 - noise_amount_masked) + noise_tensor * noise_amount_masked
+        person_for_training = downsample_and_upsample_person(noise_augmented_person)
+        x_noisy_and_masked_aug = torch.cat((x_noisy, person_for_training, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
     alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2
     snr = alphas_squared / (1 - alphas_squared)

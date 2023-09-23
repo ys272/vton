@@ -29,7 +29,7 @@ model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_a
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '17-September-23:41_2719916_normal_loss_0.033.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '21-September-12:17_3217900_normal_loss_0.039.pth'))
 model_main.load_state_dict(model_state['model_ema_main_state_dict'])
 model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
 model_main.eval()
@@ -88,7 +88,7 @@ else:
       pose_vector = process_keypoints(eval(f.readlines()[0]))
     num_needed_keypoint_dims = 12
     pose_matrix = torch.zeros((num_needed_keypoint_dims, img_height, img_width), dtype=MODEL_DTYPE)
-    # Thje vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
+    # The vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
     for p_idx in range(10, len(pose_vector), 2):
         # We flip the order of the keypoints because pytorch and tensorflow (where the keypoints come from) use a different axis ordering system.
         y = pose_vector[p_idx]
@@ -107,6 +107,7 @@ else:
     clothing_augs = []
     noise_amount_clothings = []
     sample_unique_string_ids = []
+
     for clothing_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'clothing', 's')): 
       clothing = cv2.imread(os.path.join(unaligned_test_dataset_dir,'clothing', 's', clothing_filename))
       clothing = (clothing / 127.5) - 1
@@ -138,6 +139,5 @@ else:
       noise_amount_masked_batch = torch.tensor([noise_amount_masked] * num_samples_batch, device='cuda').to(torch.bfloat16)
       
       inputs = [clothing_augs_batch, mask_coords_batch, masked_aug_batch, person_batch, pose_vector_batch, pose_matrix_batch, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing_batch, noise_amount_masked_batch]
-      imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), base_image_size=base_image_size, sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, end_batch_idx)))
-      
+      imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), base_image_size=base_image_size, sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, start_batch_idx+num_samples_batch)))
       start_batch_idx = end_batch_idx

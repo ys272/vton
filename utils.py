@@ -1,5 +1,4 @@
-import torch.nn.functional as F
-import torch
+import random
 import sys
 import os
 import cv2
@@ -89,15 +88,68 @@ def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=No
         return img
     
 
-def downsample_and_upsample_person(person: torch.Tensor) -> torch.Tensor:
+def downsample_and_upsample_person(person):
+    # Receives and returns a tensor.
+    import torch.nn.functional as F
     downsampled_person = F.interpolate(person, size=(c.VTON_RESOLUTION['s'][0], c.VTON_RESOLUTION['s'][1]), mode='area')
     upsampled_person = F.interpolate(downsampled_person, size=(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1]), mode='nearest')
     return upsampled_person
 
 
-def save_tensor_img_to_disk(img:torch.Tensor, name, target_dir=c.MODEL_OUTPUT_IMAGES_DIR, device=c.DEVICE):
+def save_tensor_img_to_disk(img, name, target_dir=c.MODEL_OUTPUT_IMAGES_DIR, device=c.DEVICE):
+    # img is a tensor.
+    import torch
     if device == 'cuda':
         img = (((img.to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
     else:
         img = (((img.to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
     cv2.imwrite(os.path.join(target_dir, f'deleteme_{name}.png'), img)
+
+
+def preprocess_s_person_output_for_m(person, noise_amount_masked):
+    # person is a tensor, noise_amount_masked is a number in [0,10000]
+    import torch
+    noise_tensor = torch.randn_like(person)
+    downsampled_person = downsample_and_upsample_person(person)
+    noise_amount_masked_scaled = noise_amount_masked / 10000
+    inverse_noise_amount_masked_scaled = 1 - noise_amount_masked_scaled
+    broadcasted_inverse_noise_amount = inverse_noise_amount_masked_scaled.view(inverse_noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    broadcasted_noise_amount = noise_amount_masked_scaled.view(noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    noise_augmented_person = downsampled_person * broadcasted_inverse_noise_amount + noise_tensor * broadcasted_noise_amount 
+    return noise_augmented_person
+    
+    # noise_tensor = torch.rand(person.shape[0], 1, person.shape[2], person.shape[3], device=person.device)
+    # downsampled_person = person#downsample_and_upsample_person(person)
+    # for p_idx in range(len(downsampled_person)):
+    #     noise_tensor_p = noise_tensor > 0.9
+    #     true_indices = torch.nonzero(noise_tensor_p)
+    #     shuffled_indices = true_indices[torch.randperm(true_indices.size(0))]
+        
+    #     for idx in shuffled_indices:
+    #         i, j = idx[0], idx[1]
+    #         neighbors = [
+    #         downsampled_person[p_idx, :, max(0, i - 1), j], downsampled_person[p_idx, :, min(175, i + 1), j],  # Above and below
+    #         downsampled_person[p_idx, :, i, max(0, j - 1)], downsampled_person[p_idx, :, i, min(175, j + 1)]  # Left and right
+    #         ]
+    #         random_neighbor = random.choice(neighbors)
+    #         downsampled_person[p_idx, :, i, j] = random_neighbor
+    # return downsampled_person
+
+    
+    # noise_amount_masked_scaled = noise_amount_masked / 10000
+    # inverse_noise_amount_masked_scaled = 1 - noise_amount_masked_scaled
+    # broadcasted_inverse_noise_amount = inverse_noise_amount_masked_scaled.view(inverse_noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    # broadcasted_noise_amount = noise_amount_masked_scaled.view(noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    # noise_augmented_person = downsampled_person * broadcasted_inverse_noise_amount + noise_tensor * broadcasted_noise_amount 
+    # return noise_augmented_person
+    
+    
+    # noise_tensor_pixel = torch.randn(person.shape[0], 1, person.shape[2], person.shape[3], device=person.device)
+    # noise_tensor = torch.cat([noise_tensor_pixel] * 3, dim=1)
+    # downsampled_person = downsample_and_upsample_person(person)
+    # noise_amount_masked_scaled = noise_amount_masked / 10000
+    # inverse_noise_amount_masked_scaled = 1 - noise_amount_masked_scaled
+    # broadcasted_inverse_noise_amount = inverse_noise_amount_masked_scaled.view(inverse_noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    # broadcasted_noise_amount = noise_amount_masked_scaled.view(noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    # noise_augmented_person = downsampled_person * broadcasted_inverse_noise_amount + noise_tensor * broadcasted_noise_amount 
+    # return noise_augmented_person

@@ -103,7 +103,7 @@ NUM_DIFFUSION_TIMESTEPS = 256
 USE_CLASSIFIER_FREE_GUIDANCE = False
 USE_AMP = True
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
-
+NUM_DIRS_FOR_M = 4
 
 '''
 DEBUG
@@ -124,7 +124,7 @@ MODELS_PARAMS = {
     't': [(128, 512, 512), (128, 512, 512), (False, True), (2,4,4), (2,4,4)]
 }
     
-IMAGE_SIZE = 's'
+IMAGE_SIZE = 'm'
 RUN_EMA = True
 EVAL_FREQUENCY = 1010
 BATCH_ACCUMULATION = 4

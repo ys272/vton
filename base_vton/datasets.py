@@ -108,12 +108,17 @@ def process_keypoints(keypoints):
     return normalized_keypoints
     
     
-def create_datasets():
+def create_datasets(dir_num = None):
     start_time = time.time()
-    print(f'Started loading data')
 
-    dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}')
-
+    if size == 's':
+        dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}')
+    elif size == 'm':
+        # The 'm' dataset is too large to hold in memory, so we split it into multiple sub dirs.
+        dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}', dir_num)
+    
+    print(f'Started loading dataset from: \n{dataset_dir}')
+    
     all_samples = {}
 
     filenames = os.listdir(dataset_dir)
@@ -191,8 +196,8 @@ def create_datasets():
             if num_samples == 2:
                 test_samples.append(final_sample_aug)
         
-    print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}\n')
-    print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}\n')
+    print(f'# samples in train, val and test: {num_added_train_samples}, {num_added_val_samples}, {num_added_test_samples}')
+    print(f'% samples in train, val and test: {(num_added_train_samples/num_total_samples):.2f}, {(num_added_val_samples/num_total_samples):.2f}, {(num_added_test_samples/num_total_samples):.2f}')
 
     # train_dataset = CustomDataset(train_samples)
     train_dataset = CustomDataset(train_samples + test_samples)
@@ -207,7 +212,7 @@ def create_datasets():
     # torch.save(test_dataloader, f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
 
     end_time = time.time()
-    print(f'Finished loading data: {end_time-start_time}')
+    print(f'Finished loading data: {end_time-start_time}\n')
     
     return train_dataloader, valid_dataloader, test_dataloader
 

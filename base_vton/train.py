@@ -99,7 +99,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '21-September-12:17_3227948_normal_loss_0.030.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-September-20:57_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -130,7 +130,11 @@ if __name__ == '__main__':
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
 
-    train_dataloader, valid_dataloader, test_dataloader = create_datasets()
+    train_dataloader, valid_dataloader, test_dataloader, valid_dataloader_iterator = None, None, None, None
+    
+    if c.IMAGE_SIZE == 's':
+        train_dataloader, valid_dataloader, test_dataloader = create_datasets()
+        valid_dataloader_iterator = iter(valid_dataloader)
     
     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader))
     # num_eval_samples = min(8, clothing_aug.shape[0])
@@ -149,12 +153,16 @@ if __name__ == '__main__':
     
     hooks = {}
     running_loss = 0
-    valid_dataloader_iterator = iter(valid_dataloader)
     last_loss_print = 0
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
         for epoch in range(epochs):
+            if c.IMAGE_SIZE == 'm':
+                del train_dataloader, valid_dataloader, test_dataloader, valid_dataloader_iterator
+                torch.cuda.empty_cache()
+                train_dataloader, valid_dataloader, test_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                valid_dataloader_iterator = iter(valid_dataloader)
             for batch in train_dataloader:
                 batch_num += 1 
                 
@@ -358,6 +366,11 @@ if __name__ == '__main__':
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_person.png'), person_img)
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_clothing.png'), clothing_img)
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_pose.png'), pose_img)
+                                    if c.IMAGE_SIZE == 'm':
+                                        # show the downsampled person input
+                                        downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
+                                        downsampled_person_for_training_img = (((downsampled_person_for_training[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
+                                        cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_inpperson.png'), downsampled_person_for_training_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:

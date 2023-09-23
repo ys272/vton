@@ -186,6 +186,10 @@ def create_final_dataset_vton_size_to_size(size='s'):
   ready_datasets = '/home/yoni/Desktop/f/data/ready_datasets'
   target_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}')
   os.makedirs(target_dir, exist_ok=True)
+  if size == 'm':
+    # The 'm' dataset is too large to hold in memory, so we split it into multiple sub dirs.
+    for num in range(c.NUM_DIRS_FOR_M):
+      os.makedirs(os.path.join(target_dir, str(num)), exist_ok=True)
   target_inspection_dir = os.path.join(ready_datasets, f'vton_{size}_to_{size}_inspection')
   os.makedirs(target_inspection_dir, exist_ok=True)
   log_filepath = os.path.join(ready_datasets, f'vton_{size}_to_{size}_log.txt')
@@ -208,11 +212,20 @@ def create_final_dataset_vton_size_to_size(size='s'):
       mask_coordinates_dir = os.path.join(c.PREPROCESSED_DATA_VTON_DIR, data_source_dir_name, 'mask_coordinates', size)
       
       def _normalize_and_save_training_sample(person_original_img:np.ndarray, clothing_img:np.ndarray, person_with_masked_clothing_img:np.ndarray, mask_coordinates_arr:np.ndarray, pose_keypoints_list:List, training_sample_id_final:str, inspect:bool):
-        person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person.pth')
-        clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.pth')
-        person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_masked.pth')
-        mask_coordinates_filepath_final = os.path.join(target_dir, training_sample_id_final + '_mask-coords.pth')
-        pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
+        if size == 's':
+          person_original_filepath_final = os.path.join(target_dir, training_sample_id_final + '_person.pth')
+          clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_clothing.pth')
+          person_with_masked_clothing_filepath_final = os.path.join(target_dir, training_sample_id_final + '_masked.pth')
+          mask_coordinates_filepath_final = os.path.join(target_dir, training_sample_id_final + '_mask-coords.pth')
+          pose_keypoints_filepath_final = os.path.join(target_dir, training_sample_id_final + '_pose.txt')
+        elif size == 'm':
+          training_sample_id_num = int(training_sample_id_final.split('_')[-2])
+          dir_num = str(training_sample_id_num % c.NUM_DIRS_FOR_M)
+          person_original_filepath_final = os.path.join(target_dir, dir_num, training_sample_id_final + '_person.pth')
+          clothing_filepath_final = os.path.join(target_dir, dir_num, training_sample_id_final + '_clothing.pth')
+          person_with_masked_clothing_filepath_final = os.path.join(target_dir, dir_num, training_sample_id_final + '_masked.pth')
+          mask_coordinates_filepath_final = os.path.join(target_dir, dir_num, training_sample_id_final + '_mask-coords.pth')
+          pose_keypoints_filepath_final = os.path.join(target_dir, dir_num, training_sample_id_final + '_pose.txt')
         # Normalize to [-1,1].
         person_original_img_norm = (person_original_img / 127.5) - 1
         clothing_img_norm = (clothing_img / 127.5) - 1
@@ -229,9 +242,9 @@ def create_final_dataset_vton_size_to_size(size='s'):
         torch.save(torch.tensor(clothing_img_norm, dtype=torch.bfloat16), clothing_filepath_final)
         torch.save(torch.tensor(person_with_masked_clothing_img_norm, dtype=torch.bfloat16), person_with_masked_clothing_filepath_final)
         torch.save(torch.tensor(mask_coordinates_arr).bool(), mask_coordinates_filepath_final)
-        
         with open(pose_keypoints_filepath_final, 'w') as pose_keypoints_file:
           pose_keypoints_file.write(str(pose_keypoints_list))
+          
         if inspect:
           person_original_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_person.jpg')
           clothing_filepath_final = os.path.join(target_inspection_dir, training_sample_id_final + '_clothing.jpg')
@@ -291,15 +304,15 @@ def create_final_dataset_vton_size_to_size(size='s'):
             _normalize_and_save_training_sample(person_original_img_aug, clothing_img_aug, person_with_masked_clothing_img_aug, mask_coordinates_arr, pose_keypoints_list_aug, training_sample_id_final, inspect)
             num_training_samples += 1
       
-        if num_training_samples > 100:
-          return
+        # if num_training_samples > 20:
+        #   return
       
       print(f'finished {data_source_dir_name}, processed {num_training_samples - num_training_samples_before_this_data_source} samples') 
-  print(f'FINISHED, total of {num_training_samples} samples')      
+  print(f'FINISHED, total of {num_training_samples} samples') 
 
 
 downsample_factor_per_size = {'m':1, 's':2, 't':4}
-for size in ['s']:
+for size in ['m']:
   new_height = VTON_RESOLUTION[size][0]
   new_width = VTON_RESOLUTION[size][1]
   downsample_factor = downsample_factor_per_size[size]

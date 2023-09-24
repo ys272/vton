@@ -202,19 +202,19 @@ def create_datasets(dir_num = None):
     # train_dataset = CustomDataset(train_samples)
     train_dataset = CustomDataset(train_samples + test_samples)
     valid_dataset = CustomDataset(val_samples)
-    test_dataset = CustomDataset(test_samples)
+    # test_dataset = CustomDataset(test_samples)
 
     # Set batch size and other options as needed
     train_dataloader = DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=3, pin_memory=True)
     valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=2, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    # test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     # torch.save(test_dataloader, f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
 
     end_time = time.time()
     print(f'Finished loading data: {end_time-start_time}\n')
     
-    return train_dataloader, valid_dataloader, test_dataloader
+    return train_dataloader, valid_dataloader#, test_dataloader
 
     for batch in train_dataloader:
         pass

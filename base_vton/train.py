@@ -1,3 +1,4 @@
+from itertools import chain
 import sys
 import argparse
 from torch.utils.tensorboard import SummaryWriter # TensorBoard support
@@ -99,7 +100,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-September-20:57_MIN_loss.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-September-23:15_201780_normal_loss_0.020.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -129,11 +130,9 @@ if __name__ == '__main__':
         print(used_checkpoint_msg)
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
-
-    train_dataloader, valid_dataloader, test_dataloader, valid_dataloader_iterator = None, None, None, None
     
     if c.IMAGE_SIZE == 's':
-        train_dataloader, valid_dataloader, test_dataloader = create_datasets()
+        train_dataloader, valid_dataloader = create_datasets()
         valid_dataloader_iterator = iter(valid_dataloader)
     
     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader))
@@ -154,15 +153,31 @@ if __name__ == '__main__':
     hooks = {}
     running_loss = 0
     last_loss_print = 0
+    # Count the number of times datasets were loaded (for the m model).
+    num_dataset_loads_for_m = 0
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
         for epoch in range(epochs):
             if c.IMAGE_SIZE == 'm':
-                del train_dataloader, valid_dataloader, test_dataloader, valid_dataloader_iterator
-                torch.cuda.empty_cache()
-                train_dataloader, valid_dataloader, test_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                if num_dataset_loads_for_m == 0:
+                    train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                else:
+                    del train_dataloader
+                    torch.cuda.empty_cache()
+                    # This is a temporary hack. The m dataset is separated into `c.NUM_DIRS_FOR_M` directories. Each directory's train contents should be loaded separately (or we'll get an OOM error).
+                    # However, we want the entire validation dataset (across all directories) to be loaded, so that the evaluation of the data happens across the entire validation dataset.
+                    # If we didn't add this code, only the first few samples of the dataset would be evaluated each epoch. It's possible to load the entire validation dataset into memory because it's relatively small.
+                    if num_dataset_loads_for_m < 4:
+                        train_dataloader, additional_valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                        valid_dataloader = chain(additional_valid_dataloader, valid_dataloader)
+                        del additional_valid_dataloader
+                    else:
+                        train_dataloader, _ = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                    torch.cuda.empty_cache()
                 valid_dataloader_iterator = iter(valid_dataloader)
+                num_dataset_loads_for_m += 1
+            
             for batch in train_dataloader:
                 batch_num += 1 
                 

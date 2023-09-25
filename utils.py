@@ -88,11 +88,24 @@ def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=No
         return img
     
 
-def downsample_and_upsample_person(person):
+def downsample_and_upsample_person(person, add_downsample_noise = False, mask_coords=None):
     # Receives and returns a tensor.
     import torch.nn.functional as F
-    downsampled_person = F.interpolate(person, size=(c.VTON_RESOLUTION['s'][0], c.VTON_RESOLUTION['s'][1]), mode='area')
+    default_downsample_size = (c.VTON_RESOLUTION['s'][0], c.VTON_RESOLUTION['s'][1])
+    downsampled_person = F.interpolate(person, size=default_downsample_size, mode='area')
     upsampled_person = F.interpolate(downsampled_person, size=(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1]), mode='nearest')
+
+    if add_downsample_noise:
+        max_additional_downsampling_height = -40
+        max_additional_downsampling_width = (c.VTON_RESOLUTION['s'][1] / c.VTON_RESOLUTION['s'][0]) * max_additional_downsampling_height
+        additional_downsampling_factor = random()
+        added_noise_downsample_size = (int(c.VTON_RESOLUTION['s'][0] + max_additional_downsampling_height * additional_downsampling_factor), int(c.VTON_RESOLUTION['s'][1] + max_additional_downsampling_width * additional_downsampling_factor))
+        downsampled_person_with_noise = F.interpolate(person, size=added_noise_downsample_size, mode='area')
+        upsampled_person_with_noise = F.interpolate(downsampled_person_with_noise, size=(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1]), mode='nearest')
+        expanded_mask_coords = mask_coords.unsqueeze(1).expand_as(upsampled_person)
+        # The downsampling is only applied to the masked part of the image (no need to downsample the face and other body parts).
+        upsampled_person[expanded_mask_coords] = upsampled_person_with_noise[expanded_mask_coords]
+        
     return upsampled_person
 
 
@@ -106,14 +119,14 @@ def save_tensor_img_to_disk(img, name, target_dir=c.MODEL_OUTPUT_IMAGES_DIR, dev
     cv2.imwrite(os.path.join(target_dir, f'deleteme_{name}.png'), img)
 
 
-def preprocess_s_person_output_for_m(person, noise_amount_masked):
+def preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise = False, mask_coords=None):
     # person is a tensor, noise_amount_masked is a number in [0,10000]
     import torch
     noise_tensor = torch.randn_like(person)
-    downsampled_person = downsample_and_upsample_person(person)
     noise_amount_masked_scaled = noise_amount_masked / 10000
     inverse_noise_amount_masked_scaled = 1 - noise_amount_masked_scaled
     broadcasted_inverse_noise_amount = inverse_noise_amount_masked_scaled.view(inverse_noise_amount_masked_scaled.shape[0], 1, 1, 1)
     broadcasted_noise_amount = noise_amount_masked_scaled.view(noise_amount_masked_scaled.shape[0], 1, 1, 1)
+    downsampled_person = downsample_and_upsample_person(person, add_downsample_noise=add_downsample_noise, mask_coords=mask_coords)
     noise_augmented_person = downsampled_person * broadcasted_inverse_noise_amount + noise_tensor * broadcasted_noise_amount 
     return noise_augmented_person

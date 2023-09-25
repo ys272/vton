@@ -113,7 +113,7 @@ def p_sample_ddpm(model, x_t, t, t_index, clip_model_output=True):
     
 
 @torch.no_grad()
-def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1, eval_mode=False, base_image_size='s'):
+def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.ndarray, t:int, t_index, clip_model_output:bool=True, eta=1, eval_mode=False, base_image_size='s', add_downsample_noise=False):
   '''
   Predict x_t1 (x at timestep t-1) using DDIM.
   If eta=0, it's deterministic.
@@ -143,8 +143,12 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
         if base_image_size == 's':
             x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
         elif base_image_size == 'm':
-            # When training the 'm' model, the upsampled person should be "noise augmented".
-            person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
+            # When running the 'm' model, the output of s should be upsampled and "noise augmented".
+            if add_downsample_noise:
+                # Make the downsampling even more extreme (before upsampling) to simulate more extreme blurring.
+                person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise=True, mask_coords=mask_coords)
+            else:
+                person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
             x_t_and_masked_aug = torch.cat((x_t, person_for_training, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
         model_output = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
   
@@ -172,14 +176,14 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
 
 
 @torch.no_grad()
-def p_sample_loop(model_main, model_aux, inputs, shape, base_image_size, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None, eval_mode=False):
+def p_sample_loop(model_main, model_aux, inputs, shape, base_image_size, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None, eval_mode=False, add_downsample_noise=False):
     if sampler == 'ddpm':
         reverse_sampler_func = p_sample_ddpm
     elif sampler == 'ddim':
         if eta is not None:
-            reverse_sampler_func = partial(p_sample_ddim, eta=eta, eval_mode=eval_mode, base_image_size=base_image_size)
+            reverse_sampler_func = partial(p_sample_ddim, eta=eta, eval_mode=eval_mode, base_image_size=base_image_size, add_downsample_noise=add_downsample_noise)
         else:
-            reverse_sampler_func = partial(p_sample_ddim, eval_mode=eval_mode, base_image_size=base_image_size)
+            reverse_sampler_func = partial(p_sample_ddim, eval_mode=eval_mode, base_image_size=base_image_size, add_downsample_noise=add_downsample_noise)
     batch_size = shape[0]
     # start from pure noise (for each example in the batch)
     img_initially_noise = torch.randn(shape, device=c.DEVICE) * c.NOISE_SCALING_FACTOR

@@ -461,8 +461,12 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     if c.IMAGE_SIZE == 's':
         x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
     elif c.IMAGE_SIZE == 'm':
-        # When training the 'm' model, the upsampled person should be "noise augmented".
-        person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
+        # When running the 'm' model, the output of s should be upsampled and "noise augmented".
+        if random.random() < 0.4:
+            # With P=0.4, make the preliminary downsampling even more extreme, effectively causing blurring.
+            person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise = True, mask_coords=mask_coords)
+        else:
+            person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
         x_noisy_and_masked_aug = torch.cat((x_noisy, person_for_training, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
     alphas_squared = extract(alphas_cumprod, t, t.shape) ** 2

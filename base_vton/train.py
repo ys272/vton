@@ -100,7 +100,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-September-23:15_201780_normal_loss_0.020.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '24-September-23:39_302260_normal_loss_0.028.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -131,6 +131,7 @@ if __name__ == '__main__':
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
     
+    train_dataloader, valid_dataloader, valid_dataloader_iterator = None, None, None
     if c.IMAGE_SIZE == 's':
         train_dataloader, valid_dataloader = create_datasets()
         valid_dataloader_iterator = iter(valid_dataloader)
@@ -153,31 +154,33 @@ if __name__ == '__main__':
     hooks = {}
     running_loss = 0
     last_loss_print = 0
-    # Count the number of times datasets were loaded (for the m model).
-    num_dataset_loads_for_m = 0
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
         for epoch in range(epochs):
             if c.IMAGE_SIZE == 'm':
-                if num_dataset_loads_for_m == 0:
-                    train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                else:
-                    del train_dataloader
-                    torch.cuda.empty_cache()
-                    # This is a temporary hack. The m dataset is separated into `c.NUM_DIRS_FOR_M` directories. Each directory's train contents should be loaded separately (or we'll get an OOM error).
-                    # However, we want the entire validation dataset (across all directories) to be loaded, so that the evaluation of the data happens across the entire validation dataset.
-                    # If we didn't add this code, only the first few samples of the dataset would be evaluated each epoch. It's possible to load the entire validation dataset into memory because it's relatively small.
-                    if num_dataset_loads_for_m < 4:
-                        train_dataloader, additional_valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                        valid_dataloader = chain(additional_valid_dataloader, valid_dataloader)
-                        del additional_valid_dataloader
-                    else:
-                        train_dataloader, _ = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                    torch.cuda.empty_cache()
+                # if num_dataset_loads_for_m == 0:
+                #     train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                # else:
+                #     del train_dataloader
+                #     torch.cuda.empty_cache()
+                #     # This is a temporary hack. The m dataset is separated into `c.NUM_DIRS_FOR_M` directories. Each directory's train contents should be loaded separately (or we'll get an OOM error).
+                #     # However, we want the entire validation dataset (across all directories) to be loaded, so that the evaluation of the data happens across the entire validation dataset.
+                #     # If we didn't add this code, only the first few samples of the dataset would be evaluated each epoch. It's possible to load the entire validation dataset into memory because it's relatively small.
+                #     if num_dataset_loads_for_m < 4:
+                #         train_dataloader, additional_valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                #         valid_dataloader = chain(additional_valid_dataloader, valid_dataloader)
+                #         del additional_valid_dataloader
+                #     else:
+                #         train_dataloader, _ = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                #     torch.cuda.empty_cache()
+                # valid_dataloader_iterator = iter(valid_dataloader)
+                # num_dataset_loads_for_m += 1
+                del train_dataloader, valid_dataloader, valid_dataloader_iterator
+                torch.cuda.empty_cache()
+                train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
                 valid_dataloader_iterator = iter(valid_dataloader)
-                num_dataset_loads_for_m += 1
-            
+
             for batch in train_dataloader:
                 batch_num += 1 
                 
@@ -295,7 +298,6 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                # print(f'epoch {epoch}, batch {batch_num}, loss: {train_loss_pre_accumulation:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')                
                 if (batch_num-1) % c.EVAL_FREQUENCY == 0:
                     print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
@@ -360,10 +362,13 @@ if __name__ == '__main__':
                                 continue
                             if eval_mode == True and not c.USE_CLASSIFIER_FREE_GUIDANCE:
                                 continue
+                            add_downsample_noise = False
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                             else:
-                                img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=c.IMAGE_SIZE, eval_mode=eval_mode)
+                                if c.IMAGE_SIZE == 'm' and random.random() < 0.5:
+                                    add_downsample_noise = True
+                                img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=c.IMAGE_SIZE, eval_mode=eval_mode, add_downsample_noise=add_downsample_noise)
                             for i,img in enumerate(img_sequences[-1]):
                                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                     img = img.clamp(-1,1)
@@ -383,9 +388,12 @@ if __name__ == '__main__':
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_pose.png'), pose_img)
                                     if c.IMAGE_SIZE == 'm':
                                         # show the downsampled person input
-                                        downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
+                                        if add_downsample_noise:
+                                            downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise=True, mask_coords=mask_coords)
+                                        else:
+                                            downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
                                         downsampled_person_for_training_img = (((downsampled_person_for_training[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                        cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_inpperson.png'), downsampled_person_for_training_img)
+                                        cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_{"down_noise" if add_downsample_noise else ""}_inpperson.png'), downsampled_person_for_training_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:

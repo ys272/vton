@@ -98,7 +98,7 @@ def downsample_and_upsample_person(person, add_downsample_noise = False, mask_co
     if add_downsample_noise:
         max_additional_downsampling_height = -40
         max_additional_downsampling_width = (c.VTON_RESOLUTION['s'][1] / c.VTON_RESOLUTION['s'][0]) * max_additional_downsampling_height
-        additional_downsampling_factor = random()
+        additional_downsampling_factor = random.random()
         added_noise_downsample_size = (int(c.VTON_RESOLUTION['s'][0] + max_additional_downsampling_height * additional_downsampling_factor), int(c.VTON_RESOLUTION['s'][1] + max_additional_downsampling_width * additional_downsampling_factor))
         downsampled_person_with_noise = F.interpolate(person, size=added_noise_downsample_size, mode='area')
         upsampled_person_with_noise = F.interpolate(downsampled_person_with_noise, size=(c.VTON_RESOLUTION['m'][0], c.VTON_RESOLUTION['m'][1]), mode='nearest')

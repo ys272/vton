@@ -138,7 +138,7 @@ if __name__ == '__main__':
     
     # clothing_aug, mask_coords, masked_aug, person, pose, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(iter(test_dataloader))
     # num_eval_samples = min(8, clothing_aug.shape[0])
-    # inputs = [clothing_aug[:num_eval_samples].cuda().float(), mask_coords[:num_eval_samples].cuda(), masked_aug[:num_eval_samples].cuda().float(), person[:num_eval_samples].cuda().float(), pose[:num_eval_samples].cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].cuda().float(), noise_amount_masked[:num_eval_samples].cuda().float()]
+    # inputs = [clothing_aug[:num_eval_samples].c.DEVICE).float(), mask_coords[:num_eval_samples].to(c.DEVICE), masked_aug[:num_eval_samples].to(c.DEVICE).float(), person[:num_eval_samples].to(c.DEVICE).float(), pose[:num_eval_samples].to(c.DEVICE).float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing[:num_eval_samples].to(c.DEVICE).float(), noise_amount_masked[:num_eval_samples].to(c.DEVICE).float()]
     # call_sampler_simple(model_main, model_aux, inputs, shape=(num_eval_samples, 3, img_height, img_width), sampler='ddim', clip_model_output=True, show_all=True, eta=1)
     # call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
@@ -202,7 +202,7 @@ if __name__ == '__main__':
                         g['lr'] = learning_rates[batch_num]
                     
                 clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
-                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), noise_amount_clothing.cuda(), noise_amount_masked.cuda()
+                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE)
                 if not c.USE_AMP:
                     clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose_vector.float(), pose_matrix.float(), noise_amount_clothing.float(), noise_amount_masked.float()
                 else:
@@ -348,12 +348,12 @@ if __name__ == '__main__':
                         clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = clothing_aug[[0,2]], mask_coords[[0,2]], masked_aug[[0,2]], person[[0,2]], pose_vector[[0,2]], pose_matrix[[0,2]], sample_original_string_id, sample_unique_string_id, noise_amount_clothing[[0,2]], noise_amount_masked[[0,2]]
                     num_eval_samples = clothing_aug.shape[0]
                     if not c.USE_AMP:
-                        inputs = [clothing_aug.cuda().float(), mask_coords.cuda().float(), masked_aug.cuda().float(), person.cuda().float(), pose_vector.cuda().float(), pose_matrix.cuda().float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.cuda().float(), noise_amount_masked.cuda().float()]
+                        inputs = [clothing_aug.to(c.DEVICE).float(), mask_coords.to(c.DEVICE).float(), masked_aug.to(c.DEVICE).float(), person.to(c.DEVICE).float(), pose_vector.to(c.DEVICE).float(), pose_matrix.to(c.DEVICE).float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).float(), noise_amount_masked.to(c.DEVICE).float()]
                     else:
                         if not c.USE_BFLOAT16:
-                            inputs = [clothing_aug.cuda().to(torch.float16), mask_coords.cuda(), masked_aug.cuda().to(torch.float16), person.cuda().to(torch.float16), pose_vector.cuda().to(torch.float16), pose_matrix.cuda().to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.cuda().to(torch.float16), noise_amount_masked.cuda().to(torch.float16)]
+                            inputs = [clothing_aug.to(c.DEVICE).to(torch.float16), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE).to(torch.float16), person.to(c.DEVICE).to(torch.float16), pose_vector.to(c.DEVICE).to(torch.float16), pose_matrix.to(c.DEVICE).to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).to(torch.float16), noise_amount_masked.to(c.DEVICE).to(torch.float16)]
                         else:
-                            inputs = [clothing_aug.cuda(), mask_coords.cuda(), masked_aug.cuda(), person.cuda(), pose_vector.cuda(), pose_matrix.cuda(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.cuda(), noise_amount_masked.cuda()]
+                            inputs = [clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE)]
                         
                     val_loss = 0
                     for eval_mode,eval_mode_id in [(True, 'with_cfg'), (False, 'no_cfg')]:

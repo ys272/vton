@@ -95,7 +95,7 @@ General
 '''
 
  # These rarely change.
-DEVICE = 'cuda'
+DEVICE = 'cuda:0'
 RANDOM_SEED = 7
 OPTIMIZE = True
 USE_BFLOAT16 = True

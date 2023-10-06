@@ -104,7 +104,7 @@ USE_CLASSIFIER_FREE_GUIDANCE = False
 USE_AMP = True
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
 NUM_DIRS_FOR_M = 4
-FREQUENCY_SAVE_MODEL_WITHOUT_LOSS_DECREASE = 25000
+FREQUENCY_SAVE_MODEL_WITHOUT_LOSS_DECREASE = 10000
 
 '''
 DEBUG

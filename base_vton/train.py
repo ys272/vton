@@ -63,10 +63,7 @@ if __name__ == '__main__':
     level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
     level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
     level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
-    if c.IMAGE_SIZE == 's':
-        num_start_channels = 19
-    elif c.IMAGE_SIZE == 'm':
-        num_start_channels = 22
+    num_start_channels = 19
     model_main = Unet_Person_Masked(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
@@ -349,8 +346,6 @@ if __name__ == '__main__':
                             if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
                                 img_sequences = p_sample_loop_karras(sample_euler_ancestral_karras, model_main_, model_aux_, inputs, steps=c.NUM_DIFFUSION_TIMESTEPS)
                             else:
-                                if c.IMAGE_SIZE == 'm' and random.random() < 0.5:
-                                    add_downsample_noise = True
                                 img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=c.IMAGE_SIZE, eval_mode=eval_mode, add_downsample_noise=add_downsample_noise)
                             for i,img in enumerate(img_sequences[-1]):
                                 if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
@@ -371,14 +366,6 @@ if __name__ == '__main__':
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_person.png'), person_img)
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_clothing.png'), clothing_img)
                                     cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_pose.png'), pose_img)
-                                    if c.IMAGE_SIZE == 'm':
-                                        # show the downsampled person input
-                                        if add_downsample_noise:
-                                            downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise=True, mask_coords=mask_coords)
-                                        else:
-                                            downsampled_person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
-                                        downsampled_person_for_training_img = (((downsampled_person_for_training[i].to(dtype=torch.float16).numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
-                                        cv2.imwrite(os.path.join(c.MODEL_OUTPUT_IMAGES_DIR, f'sample-{batch_num}_{i}{suffix}-{eval_mode_id}-{full_string_identifier}_{"down_noise" if add_downsample_noise else ""}_inpperson.png'), downsampled_person_for_training_img)
                     val_loss /= num_eval_samples
                     tb.add_scalar('val loss', val_loss, batch_num)
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:

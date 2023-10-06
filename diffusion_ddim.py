@@ -140,16 +140,7 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
         model_output = 1.25 * model_output_conditional - 0.25 * model_output_not_conditional
     else:
         cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
-        if base_image_size == 's':
-            x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
-        elif base_image_size == 'm':
-            # When running the 'm' model, the output of s should be upsampled and "noise augmented".
-            if add_downsample_noise:
-                # Make the downsampling even more extreme (before upsampling) to simulate more extreme blurring.
-                person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked, add_downsample_noise=True, mask_coords=mask_coords)
-            else:
-                person_for_training = preprocess_s_person_output_for_m(person, noise_amount_masked)
-            x_t_and_masked_aug = torch.cat((x_t, person_for_training, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
+        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
         model_output = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
   
   alphas_cumprod_t = extract(alphas_cumprod, t, x_t.shape)

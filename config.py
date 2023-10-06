@@ -104,7 +104,7 @@ USE_CLASSIFIER_FREE_GUIDANCE = False
 USE_AMP = True
 ADAM_EPS = 1e-7 if USE_AMP and not USE_BFLOAT16 else 1e-10 # min value for float16 is approx 6e-8, so epsilon must be larger than that value.
 NUM_DIRS_FOR_M = 4
-FREQUENCY_SAVE_MODEL_WITHOUT_LOSS_DECREASE = 20000
+FREQUENCY_SAVE_MODEL_WITHOUT_LOSS_DECREASE = 25000
 
 '''
 DEBUG
@@ -120,7 +120,9 @@ MAX_EFFECTIVE_BATCH_SIZE = 128
 MAX_ACCUMULATION_RATE = MAX_EFFECTIVE_BATCH_SIZE / BATCH_SIZE
 MODELS_INIT_DIM = 128
 MODELS_PARAMS = {
-    'm': [(128, 128, 320, 512, 512), (128, 128, 320, 512, 512), (False, False, False, True), (2,3,3,3,3), (2,2,2,3,3)],
+    'm_failed': [(128, 128, 320, 512, 512), (128, 128, 320, 512, 512), (False, False, False, True), (2,3,3,3,3), (2,2,2,3,3)],
+    'm': [(128, 256, 512, 576, 640), (128, 256, 512, 576, 640), (False, False, False, True), (2,3,5,5,5), (2,3,4,4,4)],
+    # 'm': [(128, 256, 512, 512, 512), (128, 256, 512, 512, 512), (False, False, False, True), (2,3,4,4,4), (2,3,4,4,4)],
     's': [(128, 320, 512, 640), (128, 320, 512, 640), (False, False, True), (3,3,4,4), (2,2,3,3)],
     't': [(128, 512, 512), (128, 512, 512), (False, True), (2,4,4), (2,4,4)]
 }

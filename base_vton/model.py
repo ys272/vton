@@ -292,7 +292,6 @@ class Unet_Clothing(nn.Module):
         layers = []
         for rep in range(level_reps):
             layers.append(ResnetBlock(dim_out, dim_out, film_emb_dim=combined_film_dim, clothing=True))
-            # layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
         self.mid1 = nn.ModuleList(layers)
         
         # Second half

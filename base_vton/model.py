@@ -112,10 +112,10 @@ class Unet_Person_Masked(nn.Module):
             layers = []
             layers.append(Upsample(dim_in, dim_in))
             for rep in range(level_reps):
-                if (base_image_size=='s' and level_idx == 1) or (base_image_size=='m' and level_idx == 2):
-                    layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim, up64=True))
-                else:
-                    layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
+                # if (base_image_size=='s' and level_idx == 1) or (base_image_size=='m' and level_idx == 2):
+                #     layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim, up64=True))
+                # else:
+                layers.append(ResnetBlock(dim_in+dim_out if rep==0 else 2*dim_out, dim_out, film_emb_dim=combined_film_dim))
                 if level_att:
                     layers.append(Residual(PreNorm(SelfAttention(dim_out), dim_out)))
                     layers.append(Residual(PreNorm(CrossAttention(dim_out, dim_cross_attn, heads=num_heads_cross_attn, dim_head=int(dim_cross_attn/num_heads_cross_attn)), dim_out, dim_cross_attn, affine=True)))

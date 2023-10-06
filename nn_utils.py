@@ -111,13 +111,13 @@ class WeightStandardizedConv2d(nn.Conv2d):
 
 
 class Block(nn.Module):
-    def __init__(self, dim, dim_out):
+    def __init__(self, dim, dim_out, up64=False):
         super().__init__()
         groups = min(32, dim//4)
         self.norm = nn.GroupNorm(groups, dim)
         self.act = nn.SiLU()
         # self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding=1)
-        self.proj = nn.Conv2d(dim, dim_out, 3, padding=1)
+        self.proj = nn.Conv2d(dim, dim_out, 3 if not up64 else 5, padding=1 if not up64 else 2)
    
     def forward(self, x, scale_shift=None):
         x = self.norm(x)
@@ -174,7 +174,7 @@ group normalization (see (Kolesnikov et al., 2019) for details).
 '''
 
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, film_emb_dim=None, clothing=False):
+    def __init__(self, dim, dim_out, *, film_emb_dim=None, clothing=False, up64=False):
         super().__init__()
         self.mlp = (
             nn.Sequential(nn.SiLU(), nn.Linear(film_emb_dim, dim * 2))
@@ -182,7 +182,7 @@ class ResnetBlock(nn.Module):
             else None
         )
         if not clothing:
-            self.block1 = Block(dim, dim_out)
+            self.block1 = Block(dim, dim_out, up64=up64)
         else:
             self.block1 = BlockClothing(dim, dim_out)
         self.block2 = Block(dim_out, dim_out)

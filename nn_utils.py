@@ -417,7 +417,7 @@ class TrainerHelper:
                 save_suffix = f'_MIN_loss.pth'
                 self.last_save_batch_num = batch_num
                 self.save(self.min_loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)
-        elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > 10000:
+        elif self.last_save_batch_num != 0 and (batch_num - self.last_save_batch_num) > c.FREQUENCY_SAVE_MODEL_WITHOUT_LOSS_DECREASE:
             save_suffix = f'_{batch_num}_normal_loss_{loss:.3f}.pth'
             self.last_save_batch_num = batch_num
             self.save(self.min_loss, model_main, model_aux, ema_model_main, ema_model_aux, was_ema_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=save_from_this_batch_num, suffix=save_suffix)

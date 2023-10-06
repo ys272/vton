@@ -159,23 +159,6 @@ if __name__ == '__main__':
         batch_training_end_time = training_start_time
         for epoch in range(epochs):
             if c.IMAGE_SIZE == 'm':
-                # if num_dataset_loads_for_m == 0:
-                #     train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                # else:
-                #     del train_dataloader
-                #     torch.cuda.empty_cache()
-                #     # This is a temporary hack. The m dataset is separated into `c.NUM_DIRS_FOR_M` directories. Each directory's train contents should be loaded separately (or we'll get an OOM error).
-                #     # However, we want the entire validation dataset (across all directories) to be loaded, so that the evaluation of the data happens across the entire validation dataset.
-                #     # If we didn't add this code, only the first few samples of the dataset would be evaluated each epoch. It's possible to load the entire validation dataset into memory because it's relatively small.
-                #     if num_dataset_loads_for_m < 4:
-                #         train_dataloader, additional_valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                #         valid_dataloader = chain(additional_valid_dataloader, valid_dataloader)
-                #         del additional_valid_dataloader
-                #     else:
-                #         train_dataloader, _ = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
-                #     torch.cuda.empty_cache()
-                # valid_dataloader_iterator = iter(valid_dataloader)
-                # num_dataset_loads_for_m += 1
                 del train_dataloader, valid_dataloader, valid_dataloader_iterator
                 torch.cuda.empty_cache()
                 train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
@@ -298,8 +281,8 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                # if (batch_num-1) % c.EVAL_FREQUENCY == 0:
-                print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                if (batch_num-1) % c.EVAL_FREQUENCY == 0:
+                    print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate

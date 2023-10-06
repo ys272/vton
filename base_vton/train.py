@@ -80,9 +80,8 @@ if __name__ == '__main__':
     scaler = torch.cuda.amp.GradScaler()
     accumulation_rate = c.BATCH_ACCUMULATION
     batch_num = 0
+    epoch_start_num = 0
     batch_num_last_accumulate_rate_update = batch_num
-    # Represents the number of batches we've done backprop on (will differ from batch num if accumulation_rate != 1)
-    backprop_batch_num = 0
     min_loss = float('inf')
     
     last_save_batch_num = 0
@@ -96,8 +95,8 @@ if __name__ == '__main__':
         ema_model_aux = None
     
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '03-October-12:44_1919988_normal_loss_0.024.pth'))
+    if 1:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-October-17:23_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -105,7 +104,7 @@ if __name__ == '__main__':
         
         min_loss = model_state['loss']
         batch_num = model_state['batch_num']
-        backprop_batch_num = model_state['backprop_batch_num']
+        epoch_start_num = model_state['epoch']
         batch_num_last_accumulate_rate_update = batch_num
         accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
@@ -140,7 +139,7 @@ if __name__ == '__main__':
     # call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler',steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=True)
     
     epochs = 1000000
-    trainer_helper = TrainerHelper(human_readable_timestamp, min_loss = min_loss, min_loss_batch_num=batch_num, backprop_batch_num=backprop_batch_num, last_save_batch_num=last_save_batch_num)
+    trainer_helper = TrainerHelper(human_readable_timestamp, min_loss = min_loss, min_loss_batch_num=batch_num, last_save_batch_num=last_save_batch_num)
     # Enable cuDNN auto-tuner: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#enable-cudnn-auto-tuner
     torch.backends.cudnn.benchmark = True
     if c.OPTIMIZE:
@@ -154,7 +153,7 @@ if __name__ == '__main__':
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
-        for epoch in range(epochs):
+        for epoch in range(epoch_start_num, epochs):
             if c.IMAGE_SIZE == 'm':
                 del train_dataloader, valid_dataloader, valid_dataloader_iterator
                 torch.cuda.empty_cache()
@@ -283,13 +282,8 @@ if __name__ == '__main__':
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
-                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, ema_model_main, ema_model_aux, ema.was_i_initialized, optimizer, scaler, batch_num, accumulation_rate, save_from_this_batch_num=1000)
+                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, ema_model_main, ema_model_aux, ema.was_i_initialized, optimizer, scaler, batch_num, accumulation_rate, epoch, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
-                        # if num_batches_since_min_loss > 100000:
-                        #     termination_msg = 'Loss has not improved for 100,000 batches. Terminating the flow.'
-                        #     log_file.write(termination_msg+'\n')
-                        #     log_file.flush()
-                        #     sys.exit(termination_msg)
                         # If the loss hasn't been reduced for this long, increase the accumulation rate.
                         if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
                             accumulation_rate *= 2
@@ -299,19 +293,6 @@ if __name__ == '__main__':
                             accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
                             log_file.write(accumulation_msg)
                             print(accumulation_msg)
-                            # Fake a learning rate reduction so that one isn't made for another 5000 batches.
-                            # trainer_helper.update_last_learning_rate_reduction(batch_num)
-                            
-                        # If the accumulation rate was already increased, reduce the learning rate.
-                        # Commenting this out since it never seems to help.
-                        # if trainer_helper.num_batches_since_last_learning_rate_reduction(batch_num) > 10000:
-                        #     reduction_rate = math.sqrt(10) # divide learning rate by sqrt(10)
-                        #     for g in optimizer.param_groups:
-                        #         g['lr'] /= reduction_rate
-                        #     trainer_helper.update_last_learning_rate_reduction(batch_num)
-                        #     lr_reduction_msg = f'-----------------------LR REDUCTION: {g["lr"]}, at batch num: {batch_num}\n'
-                        #     print(lr_reduction_msg)
-                        #     log_file.write(lr_reduction_msg+'\n')
                     elif num_batches_since_min_loss == 0:
                         loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {running_loss:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
                         print(loss_decrease_msg)

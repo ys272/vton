@@ -1,4 +1,4 @@
-from itertools import chain
+from itertools import chain, islice
 import sys
 import argparse
 from torch.utils.tensorboard import SummaryWriter # TensorBoard support
@@ -83,6 +83,7 @@ if __name__ == '__main__':
     epoch_start_num = 0
     batch_num_last_accumulate_rate_update = batch_num
     min_loss = float('inf')
+    validation_dataset_start_idx = {dir_num:0 for dir_num in range(c.NUM_DIRS_FOR_M)}
     
     last_save_batch_num = 0
     ema_batch_num_start = 1000000
@@ -109,6 +110,7 @@ if __name__ == '__main__':
         accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
         last_save_batch_num = model_state['last_save_batch_num']
+        validation_dataset_start_idx = model_state['validation_dataset_start_idx']
         
         was_ema_initialized = model_state['was_ema_initialized']
         if c.RUN_EMA and was_ema_initialized:
@@ -150,6 +152,7 @@ if __name__ == '__main__':
     hooks = {}
     running_loss = 0
     last_loss_print = 0
+    
     with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
         training_start_time = time.time()
         batch_training_end_time = training_start_time
@@ -157,9 +160,12 @@ if __name__ == '__main__':
             if c.IMAGE_SIZE == 'm':
                 del train_dataloader, valid_dataloader, valid_dataloader_iterator
                 torch.cuda.empty_cache()
-                train_dataloader, valid_dataloader = create_datasets(dir_num = str(epoch % c.NUM_DIRS_FOR_M))
+                dir_num = int(epoch % c.NUM_DIRS_FOR_M)
+                train_dataloader, valid_dataloader = create_datasets(dir_num = str(dir_num))
                 valid_dataloader_iterator = iter(valid_dataloader)
-
+                for _ in islice(valid_dataloader_iterator, validation_dataset_start_idx[dir_num]):
+                    pass
+                
             for batch in train_dataloader:
                 batch_num += 1 
                 
@@ -282,7 +288,7 @@ if __name__ == '__main__':
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
-                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, ema_model_main, ema_model_aux, ema.was_i_initialized, optimizer, scaler, batch_num, accumulation_rate, epoch, save_from_this_batch_num=1000)
+                    num_batches_since_min_loss = trainer_helper.update_loss_possibly_save_model(running_loss, model_main, model_aux, ema_model_main, ema_model_aux, ema.was_i_initialized, optimizer, scaler, batch_num, accumulation_rate, epoch, validation_dataset_start_idx, save_from_this_batch_num=1000)
                     if num_batches_since_min_loss > 5000:
                         # If the loss hasn't been reduced for this long, increase the accumulation rate.
                         if accumulation_rate < c.MAX_ACCUMULATION_RATE and trainer_helper.num_batches_since_last_accumulation_rate_increase(batch_num) > 5000:
@@ -302,9 +308,13 @@ if __name__ == '__main__':
                 if batch_num % c.EVAL_FREQUENCY == 0:
                     try:
                         clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                        if c.IMAGE_SIZE == 'm':
+                            validation_dataset_start_idx[dir_num] += 1
                     except StopIteration:
                         valid_dataloader_iterator = iter(valid_dataloader)
                         clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                        if c.IMAGE_SIZE == 'm':
+                            validation_dataset_start_idx[dir_num] = 0
                     if clothing_aug.shape[0] > 2:
                         clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = clothing_aug[[0,2]], mask_coords[[0,2]], masked_aug[[0,2]], person[[0,2]], pose_vector[[0,2]], pose_matrix[[0,2]], sample_original_string_id, sample_unique_string_id, noise_amount_clothing[[0,2]], noise_amount_masked[[0,2]]
                     num_eval_samples = clothing_aug.shape[0]

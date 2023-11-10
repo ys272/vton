@@ -206,10 +206,6 @@ def create_datasets(dir_num = None):
     train_dataloader = DataLoader(train_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=3, pin_memory=True)
     if size == 's':
         valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)
-    if size == 'm':
-        # Shuffle every iteration since the validation dataset is reoladed every epoch, and since we only iterate through a handful of 
-        # validation samples each epoch, the same few samples will keep being reevaluated, unless they are shuffled.
-        valid_dataloader = DataLoader(valid_dataset, batch_size=c.BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
     # test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     # torch.save(test_dataloader, f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')

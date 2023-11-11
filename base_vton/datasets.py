@@ -42,7 +42,7 @@ class CustomDataset(Dataset):
         # For the concatenated keypoints, we only use the body keypoints (in the vector we use everything).
         num_needed_keypoint_dims = 12
         pose_matrix = torch.zeros((num_needed_keypoint_dims, self.height, self.width), dtype=MODEL_DTYPE)
-        # Thje vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
+        # The vector flattened the pairs to a single 1D list, so the first 5 keypoints pairs now take 10 elements in total.
         for p_idx in range(10, len(pose_vector), 2):
             # We flip the order of the keypoints because pytorch and tensorflow (where the keypoints come from) use a different axis ordering system.
             y = pose_vector[p_idx]

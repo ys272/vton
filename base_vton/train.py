@@ -68,8 +68,6 @@ if __name__ == '__main__':
     model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
-
-    # initial_learning_rate = 1e-4
         
     initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
     final_learning_rate = 1e-4
@@ -96,7 +94,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-October-17:23_MIN_loss.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '08-November-00:05_4717712_normal_loss_0.023.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])

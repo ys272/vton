@@ -24,12 +24,14 @@ level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
 level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
 level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
     
-model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+# model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
+# model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
 model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '21-September-12:17_3217900_normal_loss_0.039.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-November-23:46_6908176_normal_loss_0.020.pth'))
 model_main.load_state_dict(model_state['model_ema_main_state_dict'])
 model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
 model_main.eval()
@@ -70,21 +72,21 @@ if not unaligned_test_dataset:
     imgs = call_sampler_simple_karras(model_main, model_aux, inputs, sampler='euler_ancestral', steps=250, sigma_max=c.KARRAS_SIGMA_MAX, clip_model_output=True, show_all=False)
 else:
   unaligned_test_dataset_dir = '/home/yoni/Desktop/f/test/ready_data/'
-  for person_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'person_original', 's')):
-    person = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_original', 's', person_filename))
+  for person_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'person_original', 'm')):
+    person = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_original', 'm', person_filename))
     person = (person / 127.5) - 1
     person = person.transpose(2,0,1)
     person = np.copy(person.astype(np.float16)[::-1])
     person = torch.from_numpy(person)
     
-    masked = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_with_masked_clothing', 's', person_filename))
+    masked = cv2.imread(os.path.join(unaligned_test_dataset_dir,'person_with_masked_clothing', 'm', person_filename))
     masked = (masked / 127.5) - 1
     masked = masked.transpose(2,0,1)
     masked = np.copy(masked.astype(np.float16)[::-1])
     masked = torch.from_numpy(masked)
     
-    mask_coords = torch.from_numpy(np.load(os.path.join(unaligned_test_dataset_dir,'mask_coordinates', 's', person_filename.split('.')[0] + '.npy')))
-    with open(os.path.join(unaligned_test_dataset_dir, 'pose_keypoints', 's', person_filename.split('.')[0] + '.txt'), 'r') as f:
+    mask_coords = torch.from_numpy(np.load(os.path.join(unaligned_test_dataset_dir,'mask_coordinates', 'm', person_filename.split('.')[0] + '.npy')))
+    with open(os.path.join(unaligned_test_dataset_dir, 'pose_keypoints', 'm', person_filename.split('.')[0] + '.txt'), 'r') as f:
       pose_vector = process_keypoints(eval(f.readlines()[0]))
     num_needed_keypoint_dims = 12
     pose_matrix = torch.zeros((num_needed_keypoint_dims, img_height, img_width), dtype=MODEL_DTYPE)
@@ -108,14 +110,14 @@ else:
     noise_amount_clothings = []
     sample_unique_string_ids = []
 
-    for clothing_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'clothing', 's')): 
-      clothing = cv2.imread(os.path.join(unaligned_test_dataset_dir,'clothing', 's', clothing_filename))
+    for clothing_filename in os.listdir(os.path.join(unaligned_test_dataset_dir,'clothing', 'm')): 
+      clothing = cv2.imread(os.path.join(unaligned_test_dataset_dir,'clothing', 'm', clothing_filename))
       clothing = (clothing / 127.5) - 1
       clothing = clothing.transpose(2,0,1)
       clothing = np.copy(clothing.astype(np.float16)[::-1])
       clothing = torch.from_numpy(clothing)
       
-      noise_amount_clothing = 0.01
+      noise_amount_clothing = 0#0.01
       noise_tensor = torch.randn_like(clothing)
       clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
       clothing_augs.append(clothing_aug)

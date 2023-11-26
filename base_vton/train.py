@@ -95,7 +95,7 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '12-November-10:13_5611984_normal_loss_0.021.pth'))
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-November-23:46_6908176_normal_loss_0.020.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -107,6 +107,7 @@ if __name__ == '__main__':
         batch_num_last_accumulate_rate_update = batch_num
         accumulation_rate = model_state['accumulation_rate']
         initial_learning_rate = model_state['learning_rate']
+        # initial_learning_rate = 1e-5
         last_save_batch_num = model_state['last_save_batch_num']
         validation_dataset_start_idx = model_state['validation_dataset_start_idx']
         

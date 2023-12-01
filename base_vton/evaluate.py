@@ -134,7 +134,7 @@ else:
       clothing_augs_batch = torch.stack(clothing_augs[start_batch_idx:end_batch_idx]).cuda().to(torch.bfloat16)
       mask_coords_batch = torch.stack([mask_coords.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
       masked_aug_batch = torch.stack([masked_aug.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
-      person_batch = torch.stack([person.cuda().clone() for _ in range(num_samples_batch)]).to(torch.float16)
+      person_batch = torch.stack([person.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
       pose_vector_batch = torch.stack([pose_vector.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
       pose_matrix_batch = torch.stack([pose_matrix.cuda().clone() for _ in range(num_samples_batch)]).to(torch.bfloat16)
       noise_amount_clothing_batch = torch.tensor([noise_amount_clothing] * num_samples_batch, device='cuda').to(torch.bfloat16)

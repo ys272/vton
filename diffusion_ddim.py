@@ -121,25 +121,27 @@ def p_sample_ddim(model_main, model_aux, inputs, x_t:np.ndarray, cross_attns:np.
   Values in between 0 and 1 are an interpolation between DDIM and DDPM.
   '''
   
-  clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, _, _, noise_amount_clothing, noise_amount_masked = inputs
+  clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, _, _, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = inputs
   with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
     if c.USE_CLASSIFIER_FREE_GUIDANCE and eval_mode:
         cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
         x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
-        model_output_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
-        
+        model_output_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)        
         level_dims_aux = c.MODELS_PARAMS[base_image_size][1]
         cross_attns = [torch.zeros((clothing_aug.shape[0], level_dims_aux[-1], 16, 11), device=c.DEVICE), torch.zeros((clothing_aug.shape[0], level_dims_aux[-2], 32, 22), device=c.DEVICE)]
         mask_coords = torch.zeros_like(mask_coords)
         masked_aug = torch.zeros_like(masked_aug)
         pose_vector = torch.zeros_like(pose_vector)
-        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)  
+        x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
         model_output_not_conditional = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
-        
         # model_output = torch.lerp(model_output_not_conditional, model_output_conditional, 2)
         model_output = 1.25 * model_output_conditional - 0.25 * model_output_not_conditional
     else:
-        cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+        model_aux_output = model_aux(clothing_aug)
+        cross_attns = []
+        cross_attns.append(torch.cat((model_aux_output[0], clothing_ae_0), dim=1))
+        cross_attns.append(torch.cat((model_aux_output[1], clothing_ae_1), dim=1))
+        cross_attns.append(torch.cat((model_aux_output[2], clothing_ae_2), dim=1))
         x_t_and_masked_aug = torch.cat((x_t, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
         model_output = model_main(x_t_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)
   

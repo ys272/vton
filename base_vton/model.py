@@ -30,8 +30,8 @@ class Unet_Person_Masked(nn.Module):
         self.level_repetitions = level_repetitions
                 
         # film embeddings
-        individual_film_dim = init_dim // 3
-        combined_film_dim = 2 * individual_film_dim
+        individual_film_dim = init_dim
+        combined_film_dim = individual_film_dim
         
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(init_dim),
@@ -39,11 +39,11 @@ class Unet_Person_Masked(nn.Module):
             nn.SiLU(),
             nn.Linear(individual_film_dim, individual_film_dim),
         )
-        self.masked_person_pose_mlp = nn.Sequential(
-            nn.Linear(pose_dim, individual_film_dim),
-            nn.SiLU(),
-            nn.Linear(individual_film_dim, individual_film_dim),
-        )
+        # self.masked_person_pose_mlp = nn.Sequential(
+        #     nn.Linear(pose_dim, individual_film_dim),
+        #     nn.SiLU(),
+        #     nn.Linear(individual_film_dim, individual_film_dim),
+        # )
         
         # self.masked_person_aug_mlp = nn.Sequential(
         #     SinusoidalPositionEmbeddings(init_dim),
@@ -52,13 +52,13 @@ class Unet_Person_Masked(nn.Module):
         #     nn.Linear(individual_film_dim, individual_film_dim),
         # )
         
-        self.combined_embedding_masked_person = nn.Sequential(
-            nn.Linear(combined_film_dim, combined_film_dim),
-            nn.SiLU(),
-            nn.Linear(combined_film_dim, combined_film_dim),
-            # nn.SiLU(),
-            # nn.Linear(combined_film_dim, combined_film_dim),
-        )
+        # self.combined_embedding_masked_person = nn.Sequential(
+        #     nn.Linear(combined_film_dim, combined_film_dim),
+        #     nn.SiLU(),
+        #     nn.Linear(combined_film_dim, combined_film_dim),
+        #     # nn.SiLU(),
+        #     # nn.Linear(combined_film_dim, combined_film_dim),
+        # )
         
         num_heads_cross_attn = 4
         self.init_conv = nn.Conv2d(channels, init_dim, 3, padding=1)
@@ -139,10 +139,11 @@ class Unet_Person_Masked(nn.Module):
             time_vector = self.time_mlp((t * c.NUM_DIFFUSION_TIMESTEPS / c.KARRAS_SIGMA_MAX).int())
         else:
             time_vector = self.time_mlp(t)
-        pose_vector = self.masked_person_pose_mlp(pose)
+        # pose_vector = self.masked_person_pose_mlp(pose)
         # noise_vector = self.masked_person_aug_mlp(noise_amount_masked)
         # film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector, noise_vector), dim=1))
-        film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector), dim=1))
+        # film_vector = self.combined_embedding_masked_person(torch.cat((time_vector, pose_vector), dim=1))
+        film_vector = time_vector
         # film_vector = torch.cat((time_vector, pose_vector), dim=1)
         
         cross_attn_idx = 0

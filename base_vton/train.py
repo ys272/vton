@@ -94,7 +94,7 @@ if __name__ == '__main__':
         ema_model_aux = None
     
     # Load model from checkpoint.
-    if 1:
+    if False:
         model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-November-23:46_6908176_normal_loss_0.020.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])

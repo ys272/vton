@@ -390,13 +390,13 @@ class TrainerHelper:
         torch.save({
             'batch_num': batch_num,
             'epoch': epoch,
-            'model_main_state_dict': model_main.state_dict(),
-            'model_aux_state_dict': model_aux.state_dict(),
-            'model_ema_main_state_dict': ema_model_main.state_dict(),
-            'model_ema_aux_state_dict': ema_model_aux.state_dict(),
+            'model_main_state_dict': model_main.state_dict() if model_main else None,
+            'model_aux_state_dict': model_aux.state_dict()  if model_aux else None,
+            'model_ema_main_state_dict': ema_model_main.state_dict() if ema_model_main else None,
+            'model_ema_aux_state_dict': ema_model_aux.state_dict() if ema_model_aux else None,
             'was_ema_initialized': was_ema_initialized,
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scaler_state_dict': scaler.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict() if optimizer else None,
+            'scaler_state_dict': scaler.state_dict() if scaler else None,
             'loss': min_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
             'accumulation_rate': accumulation_rate,
@@ -484,3 +484,10 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
     return loss
 
 
+def p_losses_autoencoder(model_aux, clothing_aug, loss_type="l1"):
+    reconstructed_image = model_aux(clothing_aug)
+    if loss_type == 'l1':
+        loss = F.l1_loss(reconstructed_image, clothing_aug, reduction='mean')
+    elif loss_type == 'l2':
+        loss = F.mse_loss(reconstructed_image, clothing_aug, reduction='mean')
+    return loss

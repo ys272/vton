@@ -114,6 +114,7 @@ def create_datasets(dir_num = None):
     elif size == 'm':
         # The 'm' dataset is too large to hold in memory, so we split it into multiple sub dirs.
         dataset_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}', dir_num)
+    encodings_dir = os.path.join(c.READY_DATASETS_DIR, f'vton_{size}_to_{size}', 'AE')
     
     print(f'Started loading dataset from: \n{dataset_dir}')
     
@@ -132,10 +133,14 @@ def create_datasets(dir_num = None):
     2. Determine the original locations of the files later on.
     '''
     for filename in tqdm(filenames):
-        # e.g 'misconline_72_332', shared between orig and aug, if aug exists
-        sample_original_string_id = '_'.join(filename.split('_')[:3])
-        # e.g '1_aug'.  unique for every sample.
-        sample_unique_string_id = '_'.join(filename.split('_')[-3:-1])
+        if filename[:6] == 'paired' or filename[:6] == 'multip':
+            sample_original_string_id = '_'.join(filename.split('_')[:4])
+            sample_unique_string_id = '_'.join(filename.split('_')[-3:-1])
+        else:
+            # e.g 'misconline_72_332', shared between orig and aug, if aug exists
+            sample_original_string_id = '_'.join(filename.split('_')[:3])
+            # e.g '1_aug'.  unique for every sample.
+            sample_unique_string_id = '_'.join(filename.split('_')[-3:-1])
         # e.g 'clothing'
         sample_type = filename.split('_')[-1].split('.')[0]
         # e.g 'pth' or 'txt'
@@ -174,10 +179,17 @@ def create_datasets(dir_num = None):
         # file versions. Then, the different files belonging to each (original or augmented) sample
         # should be sorted by the 'sample type', so that we have a consistent ordering.
         sample.sort(key=lambda x:(x[2],x[3]))
-        # clothing, mask-coords, masked, person, pose vector, sample_original_string_id, sample_unique_string_id
-        final_sample_orig = (sample[0][0], sample[1][0], sample[2][0], sample[3][0], sample[4][0], sample[0][1], sample[0][2])
+        # get clothing encodings        
+        clothing_encoding_0 = torch.load(os.path.join(encodings_dir, sample[0][1] + '_' + sample[0][2] + '_clothing_0.pth'))
+        clothing_encoding_1 = torch.load(os.path.join(encodings_dir, sample[0][1] + '_' + sample[0][2] + '_clothing_1.pth'))
+        clothing_encoding_2 = torch.load(os.path.join(encodings_dir, sample[0][1] + '_' + sample[0][2] + '_clothing_2.pth'))       
+        # clothing, mask-coords, masked, person, pose vector, sample_original_string_id, sample_unique_string_id, 3 clothing encodings
+        final_sample_orig = (sample[0][0], sample[1][0], sample[2][0], sample[3][0], sample[4][0], sample[0][1], sample[0][2], clothing_encoding_0, clothing_encoding_1, clothing_encoding_2)
         if num_samples == 2:
-            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0], sample[5][1], sample[5][2])
+            clothing_encoding_0 = torch.load(os.path.join(encodings_dir), sample[5][1] + '_' + sample[5][2] + '_clothing_0.pth')
+            clothing_encoding_1 = torch.load(os.path.join(encodings_dir, sample[5][1] + '_' + sample[5][2] + '_clothing_1.pth'))
+            clothing_encoding_2 = torch.load(os.path.join(encodings_dir, sample[5][1] + '_' + sample[5][2] + '_clothing_2.pth'))
+            final_sample_aug = (sample[5][0], sample[6][0], sample[7][0], sample[8][0], sample[9][0], sample[5][1], sample[5][2], clothing_encoding_0, clothing_encoding_1, clothing_encoding_2)
         if num_added_train_samples < num_required_train_samples:
             num_added_train_samples += num_samples
             train_samples.append(final_sample_orig)

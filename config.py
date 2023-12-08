@@ -121,12 +121,12 @@ MAX_ACCUMULATION_RATE = MAX_EFFECTIVE_BATCH_SIZE / BATCH_SIZE
 MODELS_INIT_DIM = 128
 MODELS_PARAMS = {
     'm_failed': [(128, 128, 320, 512, 512), (128, 128, 320, 512, 512), (False, False, False, True), (2,3,3,3,3), (2,2,2,3,3)],
-    'm': [(128, 256, 512, 576, 640), (128, 256, 512, 576, 640), (False, False, False, True), (2,3,5,5,5), (2,3,4,4,4)],
+    'm': [(128, 256, 512, 576, 640), (64, 64, 64, 64, 64), (False, False, False, True), (2,3,5,5,5), (2,3,4,4,4)],
     # 'm_still_not_fit_3060': [(128, 256, 512, 512, 512), (128, 256, 512, 512, 512), (False, False, False, True), (2,3,4,4,4), (2,3,4,4,4)],
     's': [(128, 320, 512, 640), (128, 320, 512, 640), (False, False, True), (3,3,4,4), (2,2,3,3)],
     't': [(128, 512, 512), (128, 512, 512), (False, True), (2,4,4), (2,4,4)]
 }
-    
+TOTAL_CLOTHING_AUX_DIM = 256
 IMAGE_SIZE = 'm'
 RUN_EMA = True
 EVAL_FREQUENCY = 1010

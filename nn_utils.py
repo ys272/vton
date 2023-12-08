@@ -248,7 +248,7 @@ class CrossAttention(nn.Module):
         # linear projection, creating `dim_head` values for each head; for keys and values.
         self.to_kv = nn.Conv2d(kv_dim, hidden_dim * 2, 1, bias=False)
         # self.to_qv = nn.Conv2d(q_dim, hidden_dim * 2, 1, bias=False)
-        # # linear projection, creating `dim_head` values for each head; for keys and values.
+        # linear projection, creating `dim_head` values for each head; for keys and values.
         # self.to_k = nn.Conv2d(kv_dim, hidden_dim, 1, bias=False)
         # project attention values back to original dimension so it can be added to original values.
         self.to_out = nn.Conv2d(hidden_dim, q_dim, 1, bias=False)
@@ -434,7 +434,7 @@ class TrainerHelper:
         return batch_num - self.last_accumulation_rate_increase
 
 
-def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, noise=None, loss_type="l1", apply_cfg=False):
+def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, clothing_ae_0, clothing_ae_1, clothing_ae_2, noise=None, loss_type="l1", apply_cfg=False):
     if noise is None:
         noise = torch.randn_like(masked_aug) * c.NOISE_SCALING_FACTOR
 
@@ -452,7 +452,11 @@ def p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, perso
         masked_aug = torch.zeros_like(masked_aug)
         pose_vector = torch.zeros_like(pose_vector)
     else:
-        cross_attns = model_aux(clothing_aug, pose_vector, noise_amount_clothing, t)
+        model_aux_output = model_aux(clothing_aug)
+        cross_attns = []
+        cross_attns.append(torch.cat((model_aux_output[0], clothing_ae_0), dim=1))
+        cross_attns.append(torch.cat((model_aux_output[1], clothing_ae_1), dim=1))
+        cross_attns.append(torch.cat((model_aux_output[2], clothing_ae_2), dim=1))
     
     x_noisy_and_masked_aug = torch.cat((x_noisy, masked_aug, pose_matrix, mask_coords.to(clothing_aug.dtype).unsqueeze(1)), dim=1)
     predicted_noise = model_main(x_noisy_and_masked_aug, pose_vector, noise_amount_masked, t, cross_attns=cross_attns)

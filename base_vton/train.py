@@ -13,6 +13,7 @@ import copy
 from utils import denormalize_img, save_or_return_img_w_overlaid_keypoints
 from diffusion_karras import *
 from algo.base_vton.datasets import create_datasets
+from clothing_autoencoder.model import Clothing_Classifier
 
 
 def hook_fn(name, batch_num=None):
@@ -64,8 +65,10 @@ if __name__ == '__main__':
     level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
     level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
     num_start_channels = 19
-    model_main = Unet_Person_Masked(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
-    model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+    level_dims_cross_attn = (c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM)
+    model_main = Unet_Person_Masked(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_cross_attn, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
+    # model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+    model_aux = Clothing_Classifier(channels=3, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
         
@@ -185,13 +188,13 @@ if __name__ == '__main__':
                     for g in optimizer.param_groups:
                         g['lr'] = learning_rates[batch_num]
                     
-                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = batch
-                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE)
+                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = batch
+                clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE), clothing_ae_0.to(c.DEVICE), clothing_ae_1.to(c.DEVICE), clothing_ae_2.to(c.DEVICE)
                 if not c.USE_AMP:
-                    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose_vector.float(), pose_matrix.float(), noise_amount_clothing.float(), noise_amount_masked.float()
+                    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.float(), mask_coords, masked_aug.float(), person.float(), pose_vector.float(), pose_matrix.float(), noise_amount_clothing.float(), noise_amount_masked.float(), clothing_ae_0.float(), clothing_ae_1.float(), clothing_ae_2.float()
                 else:
                     if not c.USE_BFLOAT16:
-                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.float16), mask_coords, masked_aug.to(torch.float16), person.to(torch.float16), pose_vector.to(torch.float16), pose_matrix.to(torch.float16), noise_amount_clothing.to(torch.float16), noise_amount_masked.to(torch.float16)
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked = clothing_aug.to(torch.float16), mask_coords, masked_aug.to(torch.float16), person.to(torch.float16), pose_vector.to(torch.float16), pose_matrix.to(torch.float16), noise_amount_clothing.to(torch.float16), noise_amount_masked.to(torch.float16), clothing_ae_0.to(torch.float16), clothing_ae_1.to(torch.float16), clothing_ae_2.to(torch.float16)
 
                 # show_example_noise_sequence(person[:5].squeeze(1))
                 # show_example_noise_sequence_karras(person[:5].squeeze(1), steps=100, sigma_max=c.KARRAS_SIGMA_MAX, rho=7)
@@ -211,7 +214,7 @@ if __name__ == '__main__':
                 
                 apply_cfg = random.random() < 0.1 and batch_num % 1005 != 0
                 with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
-                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, loss_type="l1", apply_cfg=apply_cfg)
+                    loss = p_losses(model_main, model_aux, clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, noise_amount_clothing, noise_amount_masked, t, clothing_ae_0, clothing_ae_1, clothing_ae_2, loss_type="l1", apply_cfg=apply_cfg)
                     
                 running_loss += loss.item()
                 
@@ -306,24 +309,24 @@ if __name__ == '__main__':
                 # Save generated images.
                 if batch_num % c.EVAL_FREQUENCY == 0:
                     try:
-                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = next(valid_dataloader_iterator)
                         if c.IMAGE_SIZE == 'm':
                             validation_dataset_start_idx[dir_num] += 1
                     except StopIteration:
                         valid_dataloader_iterator = iter(valid_dataloader)
-                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = next(valid_dataloader_iterator)
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = next(valid_dataloader_iterator)
                         if c.IMAGE_SIZE == 'm':
                             validation_dataset_start_idx[dir_num] = 0
                     if clothing_aug.shape[0] > 2:
-                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = clothing_aug[[0,2]], mask_coords[[0,2]], masked_aug[[0,2]], person[[0,2]], pose_vector[[0,2]], pose_matrix[[0,2]], sample_original_string_id, sample_unique_string_id, noise_amount_clothing[[0,2]], noise_amount_masked[[0,2]]
+                        clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked , clothing_ae_0, clothing_ae_1, clothing_ae_2= clothing_aug[[0,2]], mask_coords[[0,2]], masked_aug[[0,2]], person[[0,2]], pose_vector[[0,2]], pose_matrix[[0,2]], sample_original_string_id, sample_unique_string_id, noise_amount_clothing[[0,2]], noise_amount_masked[[0,2]], clothing_ae_0[[0,2]], clothing_ae_1[[0,2]], clothing_ae_2[[0,2]]
                     num_eval_samples = clothing_aug.shape[0]
                     if not c.USE_AMP:
-                        inputs = [clothing_aug.to(c.DEVICE).float(), mask_coords.to(c.DEVICE).float(), masked_aug.to(c.DEVICE).float(), person.to(c.DEVICE).float(), pose_vector.to(c.DEVICE).float(), pose_matrix.to(c.DEVICE).float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).float(), noise_amount_masked.to(c.DEVICE).float()]
+                        inputs = [clothing_aug.to(c.DEVICE).float(), mask_coords.to(c.DEVICE).float(), masked_aug.to(c.DEVICE).float(), person.to(c.DEVICE).float(), pose_vector.to(c.DEVICE).float(), pose_matrix.to(c.DEVICE).float(), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).float(), noise_amount_masked.to(c.DEVICE).float(), clothing_ae_0.to(c.DEVICE).float(), clothing_ae_1.to(c.DEVICE).float(), clothing_ae_2.to(c.DEVICE).float()]
                     else:
                         if not c.USE_BFLOAT16:
-                            inputs = [clothing_aug.to(c.DEVICE).to(torch.float16), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE).to(torch.float16), person.to(c.DEVICE).to(torch.float16), pose_vector.to(c.DEVICE).to(torch.float16), pose_matrix.to(c.DEVICE).to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).to(torch.float16), noise_amount_masked.to(c.DEVICE).to(torch.float16)]
+                            inputs = [clothing_aug.to(c.DEVICE).to(torch.float16), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE).to(torch.float16), person.to(c.DEVICE).to(torch.float16), pose_vector.to(c.DEVICE).to(torch.float16), pose_matrix.to(c.DEVICE).to(torch.float16), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE).to(torch.float16), noise_amount_masked.to(c.DEVICE).to(torch.float16), clothing_ae_0.to(c.DEVICE).to(torch.float16), clothing_ae_1.to(c.DEVICE).to(torch.float16), clothing_ae_2.to(c.DEVICE).to(torch.float16)]
                         else:
-                            inputs = [clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE)]
+                            inputs = [clothing_aug.to(c.DEVICE), mask_coords.to(c.DEVICE), masked_aug.to(c.DEVICE), person.to(c.DEVICE), pose_vector.to(c.DEVICE), pose_matrix.to(c.DEVICE), sample_original_string_id, sample_unique_string_id, noise_amount_clothing.to(c.DEVICE), noise_amount_masked.to(c.DEVICE), clothing_ae_0.to(c.DEVICE), clothing_ae_1.to(c.DEVICE), clothing_ae_2.to(c.DEVICE)]
                         
                     val_loss = 0
                     for eval_mode,eval_mode_id in [(True, 'with_cfg'), (False, 'no_cfg')]:

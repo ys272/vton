@@ -37,7 +37,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, index):
         sample = self.data_list[index]
-        clothing, mask_coords, masked, person, pose_vector, sample_original_string_id, sample_unique_string_id = sample
+        clothing, mask_coords, masked, person, pose_vector, sample_original_string_id, sample_unique_string_id, clothing_ae_0, clothing_ae_1, clothing_ae_2 = sample
         # There are a total of 17 keypoints, but the first five are of the face rather than the body.
         # For the concatenated keypoints, we only use the body keypoints (in the vector we use everything).
         num_needed_keypoint_dims = 12
@@ -56,13 +56,13 @@ class CustomDataset(Dataset):
         # unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, 0, 0)
         # return unaugmented_sample
         
-        unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id)
+        unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, clothing_ae_0, clothing_ae_1, clothing_ae_2)
         augmented_sample = self.augment(unaugmented_sample)
         return augmented_sample
 
 
     def augment(self, sample):
-        clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id = sample
+        clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, clothing_ae_0, clothing_ae_1, clothing_ae_2 = sample
         noise_amount_clothing = np.random.rand() / 10
         noise_tensor = torch.randn_like(clothing)
         clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
@@ -75,7 +75,7 @@ class CustomDataset(Dataset):
         masked_aug = masked
         # return the sample, replacing the original clothing and masked images with their augmented versions, 
         # and adding the noise amounts (scaled by 10, so that they'll be [0,1]).
-        augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000))
+        augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000), clothing_ae_0, clothing_ae_1, clothing_ae_2)
         # demo
         # img = ((clothing_aug+1)*127.5).cpu().to(torch.float16).numpy().astype(np.uint8).transpose(1,2,0)
         # img_ = ((clothing+1)*127.5).cpu().to(torch.float16).numpy().astype(np.uint8).transpose(1,2,0)

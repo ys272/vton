@@ -97,8 +97,8 @@ if __name__ == '__main__':
         ema_model_aux = None
     
     # Load model from checkpoint.
-    if False:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-November-23:46_6908176_normal_loss_0.020.pth'))
+    if 1:
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '08-December-17:30_MIN_loss.pth'))
         model_main.load_state_dict(model_state['model_main_state_dict'])
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
@@ -241,30 +241,36 @@ if __name__ == '__main__':
                 if batch_num % 10005 == 0:
                     log_file.flush()
                     for name, param in model_main.named_parameters():
-                        tb.add_histogram('main_'+name, param, batch_num)
-                        mean = torch.mean(param.grad)
-                        if not torch.isnan(mean):
-                            tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
-                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                                max_grad = max(max_grad, mean)
-                                if torch.abs(mean) < 1e-8:
-                                    very_low_gradients.add('main_'+name)
+                        if param is not None and param.grad is not None:
+                            tb.add_histogram('main_'+name, param, batch_num)
+                            mean = torch.mean(param.grad)
+                            if not torch.isnan(mean):
+                                tb.add_histogram(f'main_{name}.grad', param.grad, batch_num)
+                                if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                    min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                    max_grad = max(max_grad, mean)
+                                    if torch.abs(mean) < 1e-8:
+                                        very_low_gradients.add('main_'+name)
                         else:
-                            print(f'NAN!!!------------------- {name},{batch_num}')
+                            nan_msg = f'NAN!!!------------------- {name},{batch_num}'
+                            log_file.write(nan_msg+'\n')
+                            print(nan_msg)
                         
                     for name, param in model_aux.named_parameters():
-                        tb.add_histogram('aux_'+name, param, batch_num)
-                        mean = torch.mean(param.grad)
-                        if not torch.isnan(mean):
-                            tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
-                            if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
-                                min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
-                                max_grad = max(max_grad, mean)
-                                if torch.abs(mean) < 1e-8:
-                                    very_low_gradients.add('aux_'+name)
+                        if param is not None and param.grad is not None:
+                            tb.add_histogram('aux_'+name, param, batch_num)
+                            mean = torch.mean(param.grad)
+                            if not torch.isnan(mean):
+                                tb.add_histogram(f'aux_{name}.grad', param.grad, batch_num)
+                                if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH:
+                                    min_grad = min(min_grad, torch.median(torch.abs(param.grad)))
+                                    max_grad = max(max_grad, mean)
+                                    if torch.abs(mean) < 1e-8:
+                                        very_low_gradients.add('aux_'+name)
                         else:
-                            print(f'NAN!!!------------------- {name},{batch_num}')
+                            nan_msg = f'NAN!!!------------------- {name},{batch_num}'
+                            log_file.write(nan_msg+'\n')
+                            print(nan_msg)
                         
                 #     for name, hook in hooks.items():
                 #         hook.remove()

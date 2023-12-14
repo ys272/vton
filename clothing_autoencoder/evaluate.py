@@ -1,5 +1,8 @@
 from model import *
-
+import config as c
+import os
+import cv2
+import numpy as np
 
 
 if c.USE_AMP:
@@ -24,7 +27,7 @@ num_start_channels = 3
 model_aux = Clothing_Autoencoder(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
 
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '06-December-16:31_MIN_loss.pth'))
+model_state = torch.load('/home/yoni/Desktop/model weights/06-December-16:31_MIN_120K_medium_strided_USE_THIS_AUTOENCODER.pth')
 model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_aux.eval()
 size = c.IMAGE_SIZE

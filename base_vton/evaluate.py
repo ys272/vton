@@ -3,6 +3,7 @@ from model import *
 from diffusion_ddim import call_sampler_simple
 from diffusion_karras import call_sampler_simple_karras
 from datasets import CustomDataset, process_keypoints
+from clothing_autoencoder.model import Clothing_Autoencoder, Clothing_Classifier
 
 
 if c.USE_AMP:
@@ -23,19 +24,28 @@ level_dims_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][1]
 level_attentions = c.MODELS_PARAMS[c.IMAGE_SIZE][2]
 level_repetitions_main = c.MODELS_PARAMS[c.IMAGE_SIZE][3]
 level_repetitions_aux = c.MODELS_PARAMS[c.IMAGE_SIZE][4]
-    
+level_dims_cross_attn = (c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM, c.TOTAL_CLOTHING_AUX_DIM)
 # model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,).to(c.DEVICE)
 # model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
-model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_aux, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
-model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
+model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_cross_attn, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
+model_aux = Clothing_Classifier(channels=3, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
-
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-November-23:46_6908176_normal_loss_0.020.pth'))
-model_main.load_state_dict(model_state['model_ema_main_state_dict'])
-model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '08-December-19:49_995514_normal_loss_0.024.pth'))
+# model_main.load_state_dict(model_state['model_ema_main_state_dict'])
+# model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
+import sys
+sys.exit('should it be ema or not ema?')
+model_main.load_state_dict(model_state['model_main_state_dict'])
+model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_main.eval()
 model_aux.eval()
+
+model_autoencoder = Clothing_Autoencoder(channels=3, init_dim=128, level_dims=(64, 96, 192, 192, 192), training_mode=False).to(c.DEVICE)
+print(f'Total parameters in the autoencoder model:  {sum(p.numel() for p in model_autoencoder.parameters()):,}')
+model_state_ae = torch.load('/home/yoni/Desktop/model weights/06-December-16:31_MIN_120K_medium_strided_USE_THIS_AUTOENCODER.pth')
+model_autoencoder.load_state_dict(model_state_ae['model_aux_state_dict'])
+model_autoencoder.eval()
 size = c.IMAGE_SIZE
 test_dataloader = None #torch.load(f'/home/yoni/Desktop/f/data/ready_datasets/test_dataloader_{size}.pth')
 
@@ -101,9 +111,9 @@ else:
         y = torch.round(y * img_width)
         pose_matrix[int((p_idx - 10)/2)][int(min(img_height - 1, x)), int(min(img_width - 1, y))] = 1
         
-    noise_amount_masked = 0.01
+    noise_amount_masked = 1#0.01
     noise_tensor = torch.randn_like(masked)
-    masked_aug = masked * (1 - noise_amount_masked) + noise_tensor * noise_amount_masked
+    masked_aug = masked #* (1 - noise_amount_masked) + noise_tensor * noise_amount_masked
     masked_aug[:, mask_coords] = masked[:, mask_coords]
     
     clothing_augs = []
@@ -140,6 +150,14 @@ else:
       noise_amount_clothing_batch = torch.tensor([noise_amount_clothing] * num_samples_batch, device='cuda').to(torch.bfloat16)
       noise_amount_masked_batch = torch.tensor([noise_amount_masked] * num_samples_batch, device='cuda').to(torch.bfloat16)
       
-      inputs = [clothing_augs_batch, mask_coords_batch, masked_aug_batch, person_batch, pose_vector_batch, pose_matrix_batch, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing_batch, noise_amount_masked_batch]
+      # yoni
+      with torch.no_grad():
+        with torch.cuda.amp.autocast(dtype=torch.bfloat16, enabled=c.USE_AMP):
+          reconstructed_images = model_autoencoder(clothing_augs_batch)
+      clothing_ae_0 = reconstructed_images[0]
+      clothing_ae_1 = reconstructed_images[1]
+      clothing_ae_2 = reconstructed_images[2]
+      
+      inputs = [clothing_augs_batch, mask_coords_batch, masked_aug_batch, person_batch, pose_vector_batch, pose_matrix_batch, sample_unique_string_ids, sample_unique_string_ids, noise_amount_clothing_batch, noise_amount_masked_batch, clothing_ae_0, clothing_ae_1, clothing_ae_2]
       imgs = call_sampler_simple(model_main, model_aux, inputs, shape=(num_samples_batch, 3, img_height, img_width), base_image_size=base_image_size, sampler='ddim', clip_model_output=True, show_all=False, eta=1, eval_mode=False, original_indices=list(range(start_batch_idx, start_batch_idx+num_samples_batch)))
       start_batch_idx = end_batch_idx

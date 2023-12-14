@@ -204,11 +204,12 @@ def call_sampler_simple(model_main, model_aux, inputs, shape, base_image_size, s
     if not original_indices:
         original_indices = list(range(shape[0]))
     img_sequences = p_sample_loop(model_main, model_aux, inputs, shape, base_image_size=base_image_size, sampler=c.REVERSE_DIFFUSION_SAMPLER, clip_model_output=True, eta=None, eval_mode=eval_mode)
-    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked = inputs
+    clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, noise_amount_clothing, noise_amount_masked, clothing_ae_0, clothing_ae_1, clothing_ae_2 = inputs
     if not show_all:
         for img_idx,img in enumerate(img_sequences[-1]):
             save_idx = original_indices[img_idx]
             img = denormalize_img(img)
+            # pred_img = (((img.to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             save_image(img, os.path.join('/home/yoni/Desktop/f/other/debugging/denoising_examples', f'{sample_unique_string_id[img_idx]}_{save_idx}_PRED.png'), nrow = 4//2)
             masked_img = (((masked_aug[img_idx].to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)
             person_img = (((person[img_idx].to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)

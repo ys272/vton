@@ -31,11 +31,13 @@ model_main = Unet_Person_Masked(channels=19, init_dim=init_dim, level_dims=level
 model_aux = Clothing_Classifier(channels=3, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
 print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
 print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
-model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '08-December-19:49_995514_normal_loss_0.024.pth'))
+model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-December-14:04_3188890_normal_loss_0.019.pth'))
 # model_main.load_state_dict(model_state['model_ema_main_state_dict'])
 # model_aux.load_state_dict(model_state['model_ema_aux_state_dict'])
+
 import sys
 sys.exit('should it be ema or not ema?')
+
 model_main.load_state_dict(model_state['model_main_state_dict'])
 model_aux.load_state_dict(model_state['model_aux_state_dict'])
 model_main.eval()

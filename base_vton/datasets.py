@@ -63,9 +63,9 @@ class CustomDataset(Dataset):
 
     def augment(self, sample):
         clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, clothing_ae_0, clothing_ae_1, clothing_ae_2 = sample
-        noise_amount_clothing = np.random.rand() / 10
-        noise_tensor = torch.randn_like(clothing)
-        clothing_aug = clothing * (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
+        noise_amount_clothing = 1 #np.random.rand() / 10
+        # noise_tensor = torch.randn_like(clothing)
+        clothing_aug = clothing #* (1 - noise_amount_clothing) + noise_tensor * noise_amount_clothing
         
         noise_amount_masked = 1
         # np.random.rand() / 10

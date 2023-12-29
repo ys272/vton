@@ -69,6 +69,7 @@ if __name__ == '__main__':
     model_main = Unet_Person_Masked(channels=num_start_channels, init_dim=init_dim, level_dims=level_dims_main, level_dims_cross_attn=level_dims_cross_attn, level_attentions=level_attentions,level_repetitions = level_repetitions_main,base_image_size=c.IMAGE_SIZE).to(c.DEVICE)
     # model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     model_aux = Clothing_Classifier(channels=3, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
+
     print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
     print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
         
@@ -98,8 +99,8 @@ if __name__ == '__main__':
     
     # Load model from checkpoint.
     if 1:
-        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '08-December-19:49_995514_normal_loss_0.024.pth'))
-        model_main.load_state_dict(model_state['model_main_state_dict'])
+        model_state = torch.load(os.path.join(c.MODEL_OUTPUT_PARAMS_DIR, '23-December-14:04_3188890_normal_loss_0.019.pth'))
+        model_main.load_state_dict(model_state['model_main_state_dict'])    
         model_aux.load_state_dict(model_state['model_aux_state_dict'])
         optimizer.load_state_dict(model_state['optimizer_state_dict'])
         scaler.load_state_dict(model_state['scaler_state_dict'])
@@ -347,8 +348,8 @@ if __name__ == '__main__':
                             else:
                                 img_sequences = p_sample_loop(model_main_, model_aux_, inputs, shape=(num_eval_samples, 3, img_height, img_width), base_image_size=c.IMAGE_SIZE, eval_mode=eval_mode, add_downsample_noise=add_downsample_noise)
                             for i,img in enumerate(img_sequences[-1]):
-                                if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
-                                    img = img.clamp(-1,1)
+                                # if c.REVERSE_DIFFUSION_SAMPLER == 'karras':
+                                img = img.clamp(-1,1)
                                 if suffix == '_no_ema':
                                     val_loss += F.l1_loss(img.cpu(), person[i]).item()
                                 img = denormalize_img(img)

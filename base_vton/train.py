@@ -1,3 +1,4 @@
+from datetime import datetime
 from itertools import chain, islice
 import sys
 import argparse
@@ -27,7 +28,8 @@ def hook_fn(name, batch_num=None):
         tb.add_histogram(name + '.activation-in', inp[0], global_step=batch_num)
         tb.add_histogram(name + '.activation-out', output, global_step=batch_num)
     return hook
-                
+
+           
 def add_hooks(module, name='', base_name='main_', batch_num=None):
     for child_name, child_module in module.named_children():
         if list(child_module.children()):
@@ -70,8 +72,7 @@ if __name__ == '__main__':
     # model_aux = Unet_Clothing(channels=3, init_dim=init_dim, level_dims=level_dims_aux,level_repetitions=level_repetitions_aux,).to(c.DEVICE)
     model_aux = Clothing_Classifier(channels=3, init_dim=init_dim, level_dims=level_dims_aux).to(c.DEVICE)
 
-    print(f'Total parameters in the main model: {sum(p.numel() for p in model_main.parameters()):,}')
-    print(f'Total parameters in the aux model:  {sum(p.numel() for p in model_aux.parameters()):,}')
+    # parameter counts available if needed for logging via tb or files
         
     initial_learning_rate = 1e-6 # Use this when applying 1cycle policy.
     final_learning_rate = 1e-4
@@ -128,7 +129,7 @@ if __name__ == '__main__':
             g['lr'] = initial_learning_rate
 
         used_checkpoint_msg = f'LOADED CHECKPOINT!!! LR: {initial_learning_rate}, accumulation rate: {accumulation_rate}, batch num {batch_num}'
-        print(used_checkpoint_msg)
+        # write checkpoint info to log file only
         with open(os.path.join(c.MODEL_OUTPUT_LOG_DIR, f'{human_readable_timestamp}_train_log.txt'), 'w') as log_file:
             log_file.write(used_checkpoint_msg)
     
@@ -292,8 +293,7 @@ if __name__ == '__main__':
                 training_batch_time = batch_training_end_time - batch_training_start_time
                 entire_batch_loop_time = batch_training_end_time - batch_training_end_time_prev
                 
-                if (batch_num-1) % c.EVAL_FREQUENCY == 0:
-                    print(f'epoch {epoch}, batch {batch_num}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
+                # optional: write timing to tb if desired
                 
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     running_loss /= accumulation_rate
@@ -307,10 +307,10 @@ if __name__ == '__main__':
                             batch_num_last_accumulate_rate_update = batch_num
                             accumulation_msg = f'-----Accumulation rate increased: {accumulation_rate}, effective batch size: {accumulation_rate * c.BATCH_SIZE}\n'
                             log_file.write(accumulation_msg)
-                            print(accumulation_msg)
+                            # accumulation rate change noted in log file
                     elif num_batches_since_min_loss == 0:
                         loss_decrease_msg = f'---LOSS DECREASED for epoch {epoch}, batch {batch_num}: {running_loss:.3f}, training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}'
-                        print(loss_decrease_msg)
+                        # also write to log file
                         log_file.write(loss_decrease_msg+'\n')
 
                 # Save generated images.
@@ -371,10 +371,8 @@ if __name__ == '__main__':
                 if (batch_num - batch_num_last_accumulate_rate_update) % accumulation_rate == 0:
                     tb.add_scalar('train loss', running_loss, batch_num)
                     if batch_num - last_loss_print > 500:
-                        print(f'epoch {epoch}, batch {batch_num}, loss: {running_loss:.4f};   training time: {training_batch_time:.3f}, entire loop time: {entire_batch_loop_time:.3f}, ratio: {(training_batch_time/entire_batch_loop_time):.3f}')
                         last_loss_print = batch_num
                     running_loss = 0
                 if c.DEBUG_FIND_MIN_MEDIAN_GRAD_PER_BATCH and max_grad != 0:
-                    print(f'batch {batch_num}, min max grad: {min_grad}, {max_grad}')
-                    print(very_low_gradients)        
+                    pass        
     tb.close()

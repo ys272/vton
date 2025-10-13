@@ -22,7 +22,6 @@ class ClothingAEBlockDense(nn.Module):
         self.norm = nn.GroupNorm(groups, dim)
         self.act = nn.SiLU()
         if not final:
-          # TODO: This isn't really a projection, I just copied this line and didn't change the name.
           self.proj = nn.Conv2d(dim, dim_out, 3, padding=1)
         else: #padding is handled by the caller, using `ZeroPad2d`
           self.proj = nn.Conv2d(dim, dim_out, 3, padding=0, stride=2)
@@ -61,12 +60,8 @@ class ClothingAEBlock(nn.Module):
     def forward(self, x):
         h = self.block1(x)
         if self.direction != 'up':
-            # For bottom, we add the two here rather than after block3, since block3 will decrease 
-            # the spatial dimensions.
-            # TODO: For middle, try adding the two after block 3.
             h = self.block2(h) + x
         if self.direction == 'down':
-            # A strided downsampling convolution from e.g 16 to 8, requires padding on *one* of the sides (doesn't matter which).
             if self.level_idx % 2 == 0:
                 padder = torch.nn.ZeroPad2d((0,1,0,1)) # left, right, top, bottom
             else:
@@ -75,7 +70,7 @@ class ClothingAEBlock(nn.Module):
         h = self.block3(h)
         if self.direction == 'up':
             h = h + self.res_conv(x)
-        return h #+ self.res_conv(x)
+        return h
       
 
 # Note that the encoder may not have a sense of what is clothing and what is background, although
@@ -130,8 +125,6 @@ class Clothing_Autoencoder(nn.Module):
         for level_idx in range(len(self.downs)):
             res_block = self.downs[level_idx]
             x = res_block(x)
-            # We are appending the data right after it was downsampled. Before any additional processing. 
-            # Alternatively, consider appending after the additional processing (right before subsequent downsampling).
             if level_idx > 0 and len(h) < 2:
                 h.append(x)
 

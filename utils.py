@@ -75,7 +75,6 @@ def denormalize_img(img):
 
 COLOR_AQUA = (255, 255, 0) # BGR format
 def save_or_return_img_w_overlaid_keypoints(img, keypoint_coords, output_path=None, return_value=False):
-    # Draw circles on the image at the given coordinates
     for coord_idx in range(0, len(keypoint_coords), 2):
         x,y = keypoint_coords[coord_idx], keypoint_coords[coord_idx+1]
         if x != 0 or y != 0:
@@ -110,7 +109,6 @@ def downsample_and_upsample_person(person, add_downsample_noise = False, mask_co
 
 
 def save_tensor_img_to_disk(img, name, target_dir=c.MODEL_OUTPUT_IMAGES_DIR, device=c.DEVICE):
-    # img is a tensor.
     import torch
     if device == 'cuda':
         img = (((img.to(dtype=torch.float16).cpu().numpy())+1)*127.5).astype(np.uint8)[::-1].transpose(1,2,0)

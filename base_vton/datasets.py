@@ -53,8 +53,7 @@ class CustomDataset(Dataset):
             y = torch.round(y * self.width)
             pose_matrix[int((p_idx - 10)/2)][int(min(self.max_height, x)), int(min(self.max_width, y))] = 1
         
-        # unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, 0, 0)
-        # return unaugmented_sample
+        
         
         unaugmented_sample = (clothing, mask_coords, masked, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, clothing_ae_0, clothing_ae_1, clothing_ae_2)
         augmented_sample = self.augment(unaugmented_sample)
@@ -76,11 +75,7 @@ class CustomDataset(Dataset):
         # return the sample, replacing the original clothing and masked images with their augmented versions, 
         # and adding the noise amounts (scaled by 10, so that they'll be [0,1]).
         augmented_sample = (clothing_aug, mask_coords, masked_aug, person, pose_vector, pose_matrix, sample_original_string_id, sample_unique_string_id, int(noise_amount_clothing*10000), int(noise_amount_masked*10000), clothing_ae_0, clothing_ae_1, clothing_ae_2)
-        # demo
-        # img = ((clothing_aug+1)*127.5).cpu().to(torch.float16).numpy().astype(np.uint8).transpose(1,2,0)
-        # img_ = ((clothing+1)*127.5).cpu().to(torch.float16).numpy().astype(np.uint8).transpose(1,2,0)
-        # cv2.imwrite(f'/home/yoni/Desktop/examples/{noise_amount_clothing*10}.jpg', img)
-        # cv2.imwrite(f'/home/yoni/Desktop/examples/{noise_amount_clothing*10}_.jpg', img_)        
+        
         return augmented_sample  
 
 size = c.IMAGE_SIZE

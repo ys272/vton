@@ -2,45 +2,45 @@
 
 ## Overview
 
-AI-powered virtual try-on (VTON) system inspired by **"Try-On Diffusion (A Tale of Two UNets)"**. Implements the dual U-Net architecture with efficiency improvements, MoveNet pose estimation, SCHP human parsing, and cross-attention conditioning.
+This is an ML-powered virtual try-on (VTON) system, mostly inspired by **"Try-On Diffusion (A Tale of Two UNets)"**. I've implemented the dual U-Net architecture with some efficiency improvements along the way, using MoveNet for pose estimation, SCHP for human parsing, and cross-attention for conditioning.
 
 **Key Features:** Dual U-Net architecture • MoveNet pose estimation • SCHP human parsing • Multi-resolution support (64×44 to 1024×704) • DDIM & Karras sampling • Mixed precision training • Experimental alternative approaches
 
 ## Directory Structure
 
 ### `base_vton/` - **Main Implementation**
-Primary VTON system following "Tale of Two UNets" with efficiency improvements.
-- **`model.py`**: Dual U-Nets (`Unet_Person_Masked`, `Unet_Clothing`) with cross-attention and FiLM conditioning
-- **`train.py`**: Training pipeline with EMA, AMP, gradient accumulation, TensorBoard logging
+This is where the main VTON system lives, following the "Tale of Two UNets" approach with some pragmatic efficiency tweaks.
+- **`model.py`**: The dual U-Nets (`Unet_Person_Masked`, `Unet_Clothing`) with cross-attention and FiLM conditioning
+- **`train.py`**: Training pipeline featuring EMA, AMP, gradient accumulation, and TensorBoard logging
 - **`datasets.py`**: Data loading with pose processing, masking, and augmentation
 - **`evaluate.py`**: Evaluation and inference utilities
 
 ### `vton_blur/` - **Alternative Approach**
-Experimental blur-based conditioning (alternative to cross-attention).
+This was an experiment trying out blur-based conditioning as an alternative to cross-attention.
 
 ### `clothing_autoencoder/` - **Alternative Approach**
-Experimental autoencoder/classifier for clothing feature extraction with residual connections and self-attention.
+An autoencoder/classifier approach for learning clothing features, built with residual connections and self-attention.
 
 ### `data_preprocessing_vton/`
-Fashion dataset preprocessing with computer vision integration.
+All the preprocessing code for fashion datasets, with computer vision tools baked right in.
 
 **Core CV Components:**
 - **`pose.py`**: MoveNet (Thunder/Lightning) for 17-keypoint pose detection
-- **`schp.py`**: SCHP human parsing (ATR, Pascal, LIP schemes)
+- **`schp.py`**: SCHP human parsing supporting different segmentation schemes (ATR, Pascal, and LIP)
 
-**Dataset Processors:** Handles multiple data sources (artistic, clothing-people pairs, graphic tees, online datasets, multi-pose, high-res paired, same-person-two-poses)
+**Dataset Processors:** There are processors for multiple data sources here.
 
 ### Other Directories
-- **`diffusion_ddim.py`** & **`diffusion_karras.py`**: Diffusion sampling implementations
-- **`fmnist/`**: Fashion-MNIST experiments
-- **`config.py`**: System configuration (paths, model settings, hyperparameters)
-- **`nn_utils.py`** & **`utils.py`**: Neural network blocks and utilities
-- **`scripts/`**: Shell scripts for external tools (SCHP)
+- **`diffusion_ddim.py`** & **`diffusion_karras.py`**: Two diffusion sampling implementations
+- **`fmnist/`**: Some Fashion-MNIST experiments
+- **`config.py`**: System-wide configuration covering paths, model settings, and hyperparameters
+- **`nn_utils.py`** & **`utils.py`**: Various neural network blocks and utility functions
+- **`scripts/`**: Shell scripts for running external tools like SCHP
 
 ## Architecture Comparison with Try-On Diffusion
 
 ### Core Architecture
-| Aspect | Try-On Diffusion | This Repository |
+| Aspect | Try-On Diffusion | This Repo |
 |--------|------------------|-----------------|
 | **Dual UNets** | Person + Clothing UNets with cross-conditioning | `Unet_Person_Masked` + auxiliary network (`Unet_Clothing` or `Clothing_Classifier`) |
 | **Auxiliary Network** | Full clothing UNet | **Default:** `Clothing_Classifier` (lighter encoder)<br>**Available:** `Unet_Clothing` (full UNet) |
@@ -48,29 +48,26 @@ Fashion dataset preprocessing with computer vision integration.
 | **Conditioning** | Cross-UNet conditioning | FiLM time embeddings + cross-attention from clothing features<br>Optional pose/noise FiLM branches (toggleable) |
 
 ### Computer Vision Integration
-- **Pose:** MoveNet with 17-keypoint detection → rasterized into channel-wise sparse binary maps (one-hot at keypoint locations)
-- **Parsing:** SCHP integration for person masks and body segmentation
-- **Pipeline:** Explicit preprocessing implementation (`data_preprocessing_vton/`) with multi-scale support
+- **Pose:** Using MoveNet with 17-keypoint detection, which gets rasterized into channel-wise sparse binary maps (one-hot encoded at keypoint locations)
+- **Parsing:** SCHP handles person masks and body segmentation
+- **Pipeline:** The preprocessing is all implemented explicitly in `data_preprocessing_vton/` with multi-scale support
 
 ### Efficiency Improvements
-- **Model:** Lighter auxiliary encoder (`Clothing_Classifier`) reduces parameters/memory
-- **Training:** Mixed precision (AMP/bfloat16), gradient accumulation, EMA, dynamic accumulation rate
-- **Data:** Multi-resolution support (t/s/m/l), dataset sharding for medium scale
+- **Model:** The default auxiliary encoder (`Clothing_Classifier`) is lighter on parameters and memory
+- **Training:** Mixed precision training (AMP/bfloat16), gradient accumulation, EMA, and dynamic accumulation rate
+- **Data:** Multi-resolution support (tiny/small/medium/large), with dataset sharding at medium scale
 - **Logging:** TensorBoard integration with gradient monitoring
 
 ### Experimental Alternatives
-- **`vton_blur/`**: Blur-based conditioning instead of cross-attention
-- **`clothing_autoencoder/`**: Autoencoder variants for clothing understanding
+- **`vton_blur/`**: Tried blur-based conditioning instead of cross-attention
+- **`clothing_autoencoder/`**: Explored autoencoder variants for clothing understanding
 
 ### Technical Details
-**Resolutions:** Tiny (64×44) • Small (128×88) • Medium (256×176) • Large (1024×704)
+**Resolutions:** The system supports Tiny (64×44) • Small (128×88) • Medium (256×176) • Large (1024×704)
 
-**Sampling:** DDIM and Karras diffusion methods
+**Sampling:** Both DDIM and Karras diffusion methods are implemented
 
-**Main UNet Inputs (example for training):** `Unet_Person_Masked` receives a 19-channel tensor composed of masked person RGB, pose matrix channels, mask coordinates, and auxiliary signals, as defined in `base_vton/train.py` (see `num_start_channels = 19`).
+**Main UNet Inputs (training example):** The `Unet_Person_Masked` network receives a 19-channel tensor that combines masked person RGB, pose matrix channels, mask coordinates, and auxiliary signals (defined in `base_vton/train.py` where `num_start_channels = 19`).
 
-**Data Flow:** Pose estimation → Human parsing → Mask generation → Clothing encoding → Diffusion generation with cross-attention conditioning
+**Data Flow:** The pipeline goes: Pose estimation → Human parsing → Mask generation → Clothing encoding → Diffusion generation with cross-attention conditioning
 
----
-
-*Extends "Try-On Diffusion" methodology with efficiency improvements, explicit CV integration, and experimental architectural alternatives.*
